@@ -83,6 +83,7 @@ class Live_Plot():
         self.raw = mne.io.RawArray(self.data_buffer, self.info)
 
         self.stop_event = threading.Event()  # Event to stop the thread
+        self.pause_event = threading.Event()  # Event to pause the thread
         self.read_thread = threading.Thread(target=self.read_serial_data)
         self.read_thread.start()
     

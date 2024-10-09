@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import mne
+from scipy.interpolate import interp1d
 import serial
 import struct
 import threading
@@ -32,9 +33,6 @@ class App():
     def toggleLivePlot(self):
         self.clearWindow()
         self.plot = Live_Plot(self.root, n_channels=1)
-        # self.plot.read_and_plot()
-        # self.plot.create_plot()
-        # self.plot.start_timer(interval=100)
 
     def toggleBenchmark(self):
         self.clearWindow()
@@ -63,10 +61,10 @@ class Live_Plot():
         self.NUM_SAMPLES = 128          # Number of bytes to read (32 bytes = 16 samples)
         self.SAMPLE_RATE = 18000        # Define the sampling rate (Hz)
         self.NUM_CHANNELS = n_channels  # Number of channels to read
-        self.BUFFER_SIZE = 5120         # Buffer size
+        self.BUFFER_SIZE = 20480        # Buffer size
 
         self.fig, self.ax = plt.subplots(self.NUM_CHANNELS, figsize=(50, 20), dpi=100)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas = FigureCanvasTkAgg (self.fig, master=self.root)
         self.canvas.get_tk_widget().pack()
         
         # self.data_buffer = [np.zeros(100) for _ in range(self.NUM_CHANNELS)]  # Initialize buffers for 100 samples
@@ -87,7 +85,7 @@ class Live_Plot():
         self.stop_event = threading.Event()  # Event to stop the thread
         self.read_thread = threading.Thread(target=self.read_serial_data)
         self.read_thread.start()
-
+    
         self.update_plot() 
 
     def read_serial_data(self):
@@ -101,17 +99,27 @@ class Live_Plot():
                 self.data_buffer[0][:-64] = self.data_buffer[0][64:]
                 self.data_buffer[0][-64:] = samples
                 self.sample_index += 64
+                
+                # x = np.arange(len(self.data_buffer[0]))  # Original sample indices
+                # y = self.data_buffer[0]  # Sampled sine wave values
+                
+                # f_interp = interp1d(x, y, kind='linear')  # Cubic interpolation
+
+                # # Generate new x values for a smoother curve
+                # self.x_new = np.linspace(0, len(y) - 1, num=len(y) * 10)  # 10x more points
+                # self.y_new = f_interp(self.x_new)
 
     def update_plot(self):
         """Update the plot with the latest data."""
         if self.sample_index > 0:
             # Clear and plot the updated data
             self.ax.clear()
+            # self.ax.plot(self.x_new, self.y_new, color='b')
             self.ax.plot(self.data_buffer[0], color='b')
             self.ax.set_title(f"Channel {self.NUM_CHANNELS}")
             self.ax.set_xlabel('Samples')
             self.ax.set_ylabel('Amplitude')
-            self.ax.set_ylim(0, 3000)
+            self.ax.set_ylim(-1000, 4500)
 
             self.canvas.draw()
 

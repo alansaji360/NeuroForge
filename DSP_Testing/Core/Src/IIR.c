@@ -28,6 +28,9 @@ void IIR2_Init(IIR2 *filt, float a1,  float a2,  float b1, float b2, float b3){
 float IIR2_Update(IIR2 *filt, float input){
 	filt->x[0] = input;
 
+	filt->y[1] = filt->y[0];
+	filt->y[0] = filt->out;
+
 	filt->out = (filt->b[0] * filt->x[0]) +
 				(filt->b[1] * filt->x[1]) +
 				(filt->b[2] * filt->x[2]) -
@@ -38,8 +41,8 @@ float IIR2_Update(IIR2 *filt, float input){
 
 	filt->x[2] = filt->x[1];
 	filt->x[1] = filt->x[0];
-	filt->y[1] = filt->y[0];
-	filt->y[0] = filt->out;
+//	filt->y[1] = filt->y[0];
+//	filt->y[0] = filt->out;
 
 	return filt->out;
 

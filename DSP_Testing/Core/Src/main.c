@@ -69,10 +69,19 @@ uint16_t check;
 // pointers to the half of the buffer being processed
 static volatile uint32_t* input_buffer_ptr;
 static volatile uint32_t* output_buffer_ptr = &dac_vals[0];
-//EMA filter;
-//Notch filter;
+
+IIR2 low_12_1;
+IIR2 low_12_2;
+
+IIR2 high_12_1;
+IIR2 high_12_2;
+
 IIR2 low_30_1;
 IIR2 low_30_2;
+
+IIR2 high_30_1;
+IIR2 high_30_2;
+
 
 /* USER CODE END PV */
 
@@ -107,14 +116,38 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 
 void DSP(){
 
+	float in12low;
+	float out12low;
+
+	float in12high;
+	float out12high;
+
 	float in30low;
 	float out30low;
+
+	float in30high;
+	float out30high;
+
 	for(int i = 0; i < DATASIZE; i++){
+		in12low = (float) (input_buffer_ptr[i]);
+		in12high = (float) (input_buffer_ptr[i]);
 		in30low = (float) (input_buffer_ptr[i]);
+		in30high = (float) (input_buffer_ptr[i]);
+
+		out12low = IIR2_Update(&low_12_1, in12low);
+		out12low = IIR2_Update(&low_12_2, out12low);
+
+		out12high = IIR2_Update(&high_12_1, in12high);
+		out12high = IIR2_Update(&high_12_2, out12high) * 2.5;
 
 		out30low = IIR2_Update(&low_30_1, in30low);
 		out30low = IIR2_Update(&low_30_2, out30low);
-		output_buffer_ptr[i] = (uint32_t) (out30low);
+
+		out30high = IIR2_Update(&high_30_1, in30high);
+		out30high = IIR2_Update(&high_30_2, out30high) * 2;
+
+
+		output_buffer_ptr[i] = (uint32_t) (out12high);
 	}
 	data_ready = 0;
 }
@@ -161,10 +194,26 @@ int main(void)
   HAL_TIM_Base_Start(&htim6);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_vals, BUFFERSIZE);
   HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) dac_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
+
+  // INIT FILTERS
+
+  // 12 Hz low
+  IIR2_Init(&low_12_1, -1.9931, 0.9931, 0.0595e-4, 0.1190e-4, 0.0595e-4);
+  IIR2_Init(&low_12_2, -1.9929, 0.9930, 0.0997, -0.1993, 0.0997);
+
+  // 12 Hz High
+  IIR2_Init(&high_12_1, -1.9961, 0.9961, 0.9422, -1.8844, 0.9422);
+  IIR2_Init(&high_12_2, -1.9990, 0.9990, 0.9221, -1.8442, 0.9221);
+
+  // 30 Hz low
   IIR2_Init(&low_30_1, -1.9917, 0.9919, 0.5601, -1.1200, 0.5601);
   IIR2_Init(&low_30_2, -1.9879, 0.9881, 0.3144, -0.6286, 0.3144);
+
+  // 30 Hz High
+  IIR2_Init(&high_30_1, -1.9901, 0.9902, 0.9394, -1.8788, 0.9394);
+  IIR2_Init(&high_30_2, -1.9863, 0.9865, 0.9163, -1.8326, 0.9163);
+
   // a1, a2, b1, b2, b3
-//  NotchFilterInit(&filter, 30, 0.1, 18000);
   /* USER CODE END 2 */
 
   /* Infinite loop */

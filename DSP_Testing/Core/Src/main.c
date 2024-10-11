@@ -22,7 +22,6 @@
 #include "dac.h"
 #include "dma.h"
 #include "i2c.h"
-#include "spi.h"
 #include "tim.h"
 #include "usb.h"
 #include "gpio.h"
@@ -54,13 +53,15 @@
 
 /* USER CODE BEGIN PV */
 // # samples per data block(half buffer)
-#define DATASIZE 128
+#define DATASIZE 256
 // full buffer size
 #define BUFFERSIZE DATASIZE * 2
 
 //BUFFERS
 uint32_t adc_vals[BUFFERSIZE]; //adc buffer
-uint32_t dac_vals[BUFFERSIZE]; //dac buffer (may need to be larger for multiple output signals later
+uint32_t alpha_vals[BUFFERSIZE]; //alpha buffer
+uint32_t beta_vals[BUFFERSIZE]; //beta buffer
+uint32_t gamma_vals[BUFFERSIZE]; //gamma buffer
 uint8_t data_ready;
 
 //debug signals
@@ -68,10 +69,17 @@ uint16_t check;
 
 // pointers to the half of the buffer being processed
 static volatile uint32_t* input_buffer_ptr;
-static volatile uint32_t* output_buffer_ptr = &dac_vals[0];
+static volatile uint32_t* alpha_buffer_ptr = &alpha_vals[0];
+static volatile uint32_t* beta_buffer_ptr = &beta_vals[0];
+static volatile uint32_t* gamma_buffer_ptr = &gamma_vals[0];
 
-IIR2 low_12_1;
-IIR2 low_12_2;
+IIR1 high_8_1;
+IIR1 high_8_2;
+IIR1 high_8_3;
+
+IIR1 low_12_1;
+IIR1 low_12_2;
+IIR1 low_12_3;
 
 IIR2 high_12_1;
 IIR2 high_12_2;
@@ -97,9 +105,10 @@ void SystemClock_Config(void);
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	input_buffer_ptr = &adc_vals[0];
-	output_buffer_ptr = &dac_vals[0];
 
-	check = 2;
+	alpha_buffer_ptr = &alpha_vals[0];
+	beta_buffer_ptr = &beta_vals[0];
+	gamma_buffer_ptr = &gamma_vals[0];
 
 	data_ready = 1;
 }
@@ -107,47 +116,62 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	input_buffer_ptr = &adc_vals[DATASIZE];
-	output_buffer_ptr = &dac_vals[DATASIZE];
 
-	check = 1;
+	alpha_buffer_ptr = &alpha_vals[DATASIZE];
+	beta_buffer_ptr = &beta_vals[DATASIZE];
+	gamma_buffer_ptr = &gamma_vals[DATASIZE];
 
 	data_ready = 1;
 }
 
 void DSP(){
 
-	float in12low;
+	float in8high;
+	float out8high;
+
+//	float in12low;
 	float out12low;
 
 	float in12high;
 	float out12high;
 
-	float in30low;
+//	float in30low;
 	float out30low;
 
 	float in30high;
 	float out30high;
 
+
 	for(int i = 0; i < DATASIZE; i++){
-		in12low = (float) (input_buffer_ptr[i]);
+		in8high = (float) (input_buffer_ptr[i]);
+//		in12low = (float) (input_buffer_ptr[i]);
 		in12high = (float) (input_buffer_ptr[i]);
-		in30low = (float) (input_buffer_ptr[i]);
+//		in30low = (float) (input_buffer_ptr[i]);
 		in30high = (float) (input_buffer_ptr[i]);
 
-		out12low = IIR2_Update(&low_12_1, in12low);
-		out12low = IIR2_Update(&low_12_2, out12low);
+		out8high = IIR1_Update(&high_8_1, in8high);
+		out8high = IIR1_Update(&high_8_2, out8high);
+		out8high = IIR1_Update(&high_8_3, out8high) + 1500;
+
+		out12low = IIR1_Update(&low_12_1, out8high);
+		out12low = IIR1_Update(&low_12_2, out12low);
+		out12low = IIR1_Update(&low_12_3, out12low);
+		out12low *= 1.5;
 
 		out12high = IIR2_Update(&high_12_1, in12high);
-		out12high = IIR2_Update(&high_12_2, out12high) * 2.5;
+		out12high = IIR2_Update(&high_12_2, out12high) + 1500;
+		out12high *= 1.1;
 
-		out30low = IIR2_Update(&low_30_1, in30low);
+		out30low = IIR2_Update(&low_30_1, out12high);
 		out30low = IIR2_Update(&low_30_2, out30low);
 
 		out30high = IIR2_Update(&high_30_1, in30high);
-		out30high = IIR2_Update(&high_30_2, out30high) * 2;
+		out30high = IIR2_Update(&high_30_2, out30high) + 1700;
 
 
-		output_buffer_ptr[i] = (uint32_t) (out12high);
+		alpha_buffer_ptr[i] = (uint32_t) (out12low);
+		beta_buffer_ptr[i] = (uint32_t) (out30low);
+		gamma_buffer_ptr[i] = (uint32_t) (out30high);
 	}
 	data_ready = 0;
 }
@@ -184,7 +208,6 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  MX_SPI1_Init();
   MX_USB_PCD_Init();
   MX_ADC1_Init();
   MX_DAC_Init();
@@ -193,13 +216,18 @@ int main(void)
   // START TIME BASE AND DMA CHANNELS
   HAL_TIM_Base_Start(&htim6);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_vals, BUFFERSIZE);
-  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) dac_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
-
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) alpha_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_2, (uint32_t *) gamma_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
   // INIT FILTERS
+  // 8 Hz High
+  IIR1_Init(&high_8_1, -0.9986, 0.9993, -0.9993);
+  IIR1_Init(&high_8_2, -0.9986, 0.9993, -0.9993);
+  IIR1_Init(&high_8_3, -0.9986, 0.9993, -0.9993);
 
   // 12 Hz low
-  IIR2_Init(&low_12_1, -1.9931, 0.9931, 0.0595e-4, 0.1190e-4, 0.0595e-4);
-  IIR2_Init(&low_12_2, -1.9929, 0.9930, 0.0997, -0.1993, 0.0997);
+  IIR1_Init(&low_12_1, -0.9925, 0.0038, 0.0038);
+  IIR1_Init(&low_12_2, -0.9864, 0.0068, 0.0068);
+  IIR1_Init(&low_12_3, -0.9898, 0.0051, 0.0051);
 
   // 12 Hz High
   IIR2_Init(&high_12_1, -1.9961, 0.9961, 0.9422, -1.8844, 0.9422);

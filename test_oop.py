@@ -58,10 +58,10 @@ class Live_Plot():
         
         self.COM_PORT = 'COM3'          # Change to your COM port
         self.BAUD_RATE = 115200         # Change to the appropriate baud rate
-        self.NUM_SAMPLES = 128          # Number of bytes to read (32 bytes = 16 samples)
+        self.NUM_SAMPLES = 64          # Number of bytes to read (32 bytes = 16 samples)
         self.SAMPLE_RATE = 18000        # Define the sampling rate (Hz)
         self.NUM_CHANNELS = n_channels  # Number of channels to read
-        self.BUFFER_SIZE = 20480        # Buffer size
+        self.BUFFER_SIZE = 10240        # Buffer size
 
         self.fig, self.ax = plt.subplots(self.NUM_CHANNELS, figsize=(50, 20), dpi=100)
         self.canvas = FigureCanvasTkAgg (self.fig, master=self.root)
@@ -94,12 +94,13 @@ class Live_Plot():
         while not self.stop_event.is_set():
             if self.ser.in_waiting >= self.NUM_SAMPLES:
                 data = self.ser.read(self.NUM_SAMPLES)
-                samples = struct.unpack('<64H', data)  # Unpack the data
+                samples = struct.unpack('<32H', data)  # Unpack the data
 
                 # Shift the buffer and add new samples
-                self.data_buffer[0][:-64] = self.data_buffer[0][64:]
-                self.data_buffer[0][-64:] = samples
-                self.sample_index += 64
+                skip = int(self.NUM_SAMPLES / 2)
+                self.data_buffer[0][:-skip] = self.data_buffer[0][skip:]
+                self.data_buffer[0][-skip:] = samples
+                self.sample_index += skip
 
     def update_plot(self):
         """Update the plot with the latest data."""

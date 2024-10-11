@@ -53,7 +53,7 @@
 
 /* USER CODE BEGIN PV */
 // # samples per data block(half buffer)
-#define DATASIZE 256
+#define DATASIZE 128
 // full buffer size
 #define BUFFERSIZE DATASIZE * 2
 
@@ -89,6 +89,9 @@ IIR2 low_30_2;
 
 IIR2 high_30_1;
 IIR2 high_30_2;
+
+IIR2 low_100_1;
+IIR2 low_100_2;
 
 
 /* USER CODE END PV */
@@ -141,6 +144,8 @@ void DSP(){
 	float in30high;
 	float out30high;
 
+//	float in100low;
+	float out100low;
 
 	for(int i = 0; i < DATASIZE; i++){
 		in8high = (float) (input_buffer_ptr[i]);
@@ -148,6 +153,7 @@ void DSP(){
 		in12high = (float) (input_buffer_ptr[i]);
 //		in30low = (float) (input_buffer_ptr[i]);
 		in30high = (float) (input_buffer_ptr[i]);
+//		in100low = (float) (input_buffer_ptr[i]);
 
 		out8high = IIR1_Update(&high_8_1, in8high);
 		out8high = IIR1_Update(&high_8_2, out8high);
@@ -168,10 +174,12 @@ void DSP(){
 		out30high = IIR2_Update(&high_30_1, in30high);
 		out30high = IIR2_Update(&high_30_2, out30high) + 1700;
 
+		out100low = IIR2_Update(&low_100_1, out30high);
+		out100low = IIR2_Update(&low_100_2, out100low) * 1.5;
 
 		alpha_buffer_ptr[i] = (uint32_t) (out12low);
 		beta_buffer_ptr[i] = (uint32_t) (out30low);
-		gamma_buffer_ptr[i] = (uint32_t) (out30high);
+		gamma_buffer_ptr[i] = (uint32_t) (out100low);
 	}
 	data_ready = 0;
 }
@@ -216,8 +224,8 @@ int main(void)
   // START TIME BASE AND DMA CHANNELS
   HAL_TIM_Base_Start(&htim6);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_vals, BUFFERSIZE);
-  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) alpha_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
-  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_2, (uint32_t *) gamma_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) gamma_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
+  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_2, (uint32_t *) alpha_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
   // INIT FILTERS
   // 8 Hz High
   IIR1_Init(&high_8_1, -0.9986, 0.9993, -0.9993);
@@ -240,6 +248,10 @@ int main(void)
   // 30 Hz High
   IIR2_Init(&high_30_1, -1.9901, 0.9902, 0.9394, -1.8788, 0.9394);
   IIR2_Init(&high_30_2, -1.9863, 0.9865, 0.9163, -1.8326, 0.9163);
+
+  // 100 Hz Low
+  IIR2_Init(&low_100_1, -1.9626, 0.9645, 0.4390, -0.8762, 0.4390);
+  IIR2_Init(&low_100_2, -1.9804, 0.9824, 0.9145, -1.8270, 0.9145);
 
   // a1, a2, b1, b2, b3
   /* USER CODE END 2 */

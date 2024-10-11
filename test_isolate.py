@@ -109,11 +109,11 @@ class Live_Plot():
             self.ax.plot(self.data_buffer[0], color='b', label='Raw EEG')
 
             # Detect and highlight blinks
-            blinks = self.detect_blinks(self.data_buffer[0], 800)
+            blinks = self.detect_blinks(self.data_buffer[0], 1800)
             for blink in blinks:
-                print("blink")
+                # print("blink")
                 # self.indicator.toggle_light()
-                # self.ax.axvline(x=blink, color='r', linestyle='--', label='Blink Detected' if blink == blinks[0] else "")
+                self.ax.axvline(x=blink, color='r', linestyle='--', label='Blink Detected' if blink == blinks[0] else "")
 
             self.ax.legend()
             self.ax.set_title("Real-Time Blink Detection")

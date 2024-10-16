@@ -15,7 +15,6 @@ class App():
         self.root = tk.Tk()
         self.root.geometry("200x200")
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
-        self.plot = None
 
     def callback(self):
         if self.plot is not None:
@@ -70,10 +69,12 @@ class Live_Plot():
         self.sample_index = 0
         self.stop_event = threading.Event()  # Event to stop the thread
         self.pause_event = threading.Event()  # Event to pause the thread
+
         self.read_thread = threading.Thread(target=self.read_serial_data)
         self.read_thread.start()
-
+        
         self.light_thread = threading.Thread(target=self.indicator.toggle_light)
+
     
         self.update_plot() 
 
@@ -109,7 +110,7 @@ class Live_Plot():
             self.ax.plot(self.data_buffer[0], color='b', label='Raw EEG')
 
             # Detect and highlight blinks
-            blinks = self.detect_blinks(self.data_buffer[0], 1800)
+            blinks = self.detect_blinks(self.data_buffer[0], 2400)
             for blink in blinks:
                 # print("blink")
                 # self.indicator.toggle_light()

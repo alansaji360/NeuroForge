@@ -1,9 +1,5 @@
-import tkinter as tk
-from tkinter.ttk import *
-from tkinter import messagebox
-from tkinter import filedialog
-from tkinter import HORIZONTAL
-from tkinter import ttk
+
+from button_styles import createButton, createGlowText
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -14,17 +10,25 @@ import queue
 from scipy.interpolate import interp1d
 import serial
 import struct
-import time
 import threading
+import time
+import tkinter as tk
+from tkinter.ttk import *
+from tkinter import messagebox
+from tkinter import filedialog
+from tkinter import HORIZONTAL
+from tkinter import ttk
 
 class App():
     def __init__(self):
         """Initialize the App object."""
+        self.BG_COLOR = "#141414"
+
         self.root = None
         self.root = tk.Tk()
         self.root.geometry("400x500")
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
-        self.root.configure(bg="#141414")
+        self.root.configure(bg=self.BG_COLOR)
         self.plot = None
 
         self.mainMenu()
@@ -53,129 +57,13 @@ class App():
         self.clearWindow()
         self.benchmark = Benchmark(self.root)
 
-    def createButton(self, text, command):
-        """Create a circular button with a frosted glass effect."""
-        frame = tk.Frame(self.root, bg="#E0E0E0")
-        canvas = tk.Canvas(frame, width=100, height=100, bg="#E0E0E0", highlightthickness=0)
-
-        # Draw the circle with Pillow (frosted effect)
-        img = Image.new("RGBA", (100, 100), (255, 255, 255, 0))
-        draw = ImageDraw.Draw(img)
-        draw.ellipse((0, 0, 100, 100), fill=(255, 255, 255, 180))  # White with transparency
-
-        # Convert the Pillow image to a Tkinter-compatible image
-        tk_img = ImageTk.PhotoImage(img)
-        canvas.create_image(0, 0, anchor="nw", image=tk_img)
-        canvas.image = tk_img  # Keep a reference to avoid garbage collection
-
-        # Add the button text at the center
-        canvas.create_text(50, 50, text=text, fill="#333", font=("Helvetica", 12, "bold"))
-
-        # Bind the click event to the provided command
-        canvas.bind("<Button-1>", lambda event: command())
-
-        canvas.pack()
-        return frame
-    
-    # def create_glowing_text(self, text, x, y, color, size=32):
-    #     """Create glowing, animated text."""
-    #     lbl = tk.Label(self.root, text=text, font=("OCR A Extended", size), bg="#0d0d0d", fg=color)
-    #     lbl.place(x=x, y=y)
-
-    #     # Start the glow animation in a separate thread
-    #     # threading.Thread(target=self.animate_glow, args=(lbl,), daemon=True).start()
-
-    # def animate_glow(self, label):
-    #     """Animate the glow effect by cycling through colors."""
-    #     colors = ["#FF00FF", "#00FFFF", "#FF4500", "#ADFF2F"]
-    #     while True:
-    #         for color in colors:
-    #             label.config(fg=color)
-    #             time.sleep(0.5)  # Delay between color changes
-
-    def create_glowing_text(self, text, x, y, color, size=32):
-        """Create glowing, animated text."""
-        lbl = tk.Label(self.root, text=text, font=("OCR A Extended", size), bg="#0d0d0d", fg=color)
-        lbl.place(x=x, y=y)
-
-        threading.Thread(target=self.animate_glow, args=(lbl, color), daemon=True).start()
-
-    def animate_glow(self, widget, color):
-        """Animate the widget with a glowing effect."""
-        while True:
-            for alpha in range(100, 255, 5):  # Brighten
-                hex_color = self.color_with_alpha(color, alpha)
-                widget.config(fg=hex_color)
-                time.sleep(0.05)
-            for alpha in range(255, 100, -5):  # Dim
-                hex_color = self.color_with_alpha(color, alpha)
-                widget.config(fg=hex_color)
-                time.sleep(0.05)
-
-    def color_with_alpha(self, color, alpha):
-        """Convert a hex color to include an alpha component."""
-        rgb = tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
-        return f"#{''.join(f'{int(c * (alpha / 255)):02X}' for c in rgb)}"
-
-    def pulse_glow(self, label):
-        """Animate pulsing glow effect."""
-        colors = ["#FF00FF", "#00FFFF", "#FF4500", "#ADFF2F"]
-        size = 36  # Initial font size
-        while True:
-            for color in colors:
-                for scale in [1.0, 1.1, 1.2, 1.1, 1.0]:  # Pulsing effect scaling
-                    label.config(fg=color, font=("OCR A Extended", int(size * scale)))
-                    time.sleep(0.1)  # Control the speed of the pulse
-
-    def create_cyberpunk_button(self, text, x, y, command):
-        """Create a custom cyberpunk-style button."""
-        style = ttk.Style()
-        style.configure(
-            "Cyberpunk.TButton",
-            font=("OCR A Extended", 14),
-            foreground="#0d0d0d",
-            background="#FF00FF",
-            padding=10,
-            relief="flat"
-        )
-        style.map(
-            "Cyberpunk.TButton",
-            background=[("active", "#00FFFF")],  # Change on hover
-        )
-
-        button = ttk.Button(self.root, text=text, style="Cyberpunk.TButton", command=command)
-        button.place(x=x, y=y, width=300, height=50)
-
     def mainMenu(self):
         """Create the main menu."""
-        # style = Style()
-        # style.configure("TButton", padding=6, relief="flat", background="#20b2aa", activebackground="#20b2aa")
+        createGlowText(self.root, "NEUROFORGE", 50, 50, "#FF00FF", size=36)
 
-        # Live = Button(self.root, text ="LivePlot", command = self.toggleLivePlot, style="TButton")
-        # Live.pack(expand=True)
-
-        # Benchmark = Button(self.root, text ="Benchmark", command = self.toggleBenchmark, style="TButton")
-        # Benchmark.pack(expand=True)
-        
-        # exit_button = Button(self.root, text = "Exit", command = exit, style="TButton") 
-        # exit_button.pack(expand=True)
-
-        # self.createButton("Live Plot", self.toggleLivePlot).pack(expand=True)
-        # self.createButton("Benchmark", self.toggleBenchmark).pack(expand=True)
-        # self.createButton("Exit", exit).pack(expand=True)
-        
-        # self.root.mainloop()
-
-        self.create_glowing_text("NEUROFORGE", 50, 50, "#FF00FF", size=36)
-
-        # Create two neon buttons with hover effects
-        # self.create_neon_button("Start Neural Sync", "#00FFFF", self.toggleLivePlot, 150, 200)
-        # self.create_neon_button("Enter Cyberspace", "#FF007F", self.toggleBenchmark, 150, 300)
-        # self.create_neon_button("Exit", "#FF0000", exit, 150, 400)
-
-        self.create_cyberpunk_button("Start Live Plot", 50, 150, self.toggleLivePlot)
-        self.create_cyberpunk_button("Benchmark", 50, 250, self.toggleBenchmark)
-        self.create_cyberpunk_button("Exit", 50, 350, exit)
+        createButton(self.root, "Start Live Plot",    50, 150, self.toggleLivePlot)
+        createButton(self.root, "Benchmark",          50, 250, self.toggleBenchmark)
+        createButton(self.root, "Exit",               50, 350, exit)
 
         # Start the Tkinter main loop
         self.root.mainloop()

@@ -16,7 +16,7 @@ import threading
 
 class App():
     def __init__(self):
-        """Initialize the App object."""
+        """Initialize the App object"""
         self.root = None
         self.root = tk.Tk()
         self.root.geometry("200x200")
@@ -32,26 +32,26 @@ class App():
         self.root.quit()     
     
     def clearWindow(self):
-        """Clear the window of all widgets."""
+        """Clear the window of all widgets"""
         for widget in self.root.winfo_children():
             widget.destroy()
 
     def toggleLivePlot(self):
-        """Toggle the live plot window."""
+        """Toggle the live plot window"""
         self.clearWindow()
         with open('waveform_data.csv', 'w') as file:
             file.truncate(0)
         print("waveform_data.csv: cleared")
-        self.plot = LivePlot(self.root, n_channels=1)
+        self.plot = LivePlot(self.root, self.mainMenu, n_channels=1)
 
     def toggleBenchmark(self):
-        """Toggle the benchmark window."""
+        """Toggle the benchmark window"""
         self.clearWindow()
-        self.benchmark = Benchmark(self.root)
+        self.benchmark = Benchmark(self.root, self.mainMenu)
         self.benchmark.benchmark()
 
     def mainMenu(self):
-        """Create the main menu."""
+        """Create the main menu"""
         style = Style()
         style.configure("TButton", padding=6, relief="flat", background="#20b2aa", activebackground="#20b2aa")
 
@@ -67,9 +67,10 @@ class App():
         self.root.mainloop()
 
 class LivePlot():
-    def __init__(self, root, n_channels = 1):
+    def __init__(self, root, main_menu_callback, n_channels = 1):
         """Initialize Live_Plot object"""
         self.root = root
+        self.main_menu_callback = main_menu_callback
         
         self.COM_PORT = 'COM3'          # Change to your COM port
         self.BAUD_RATE = 115200         # Change to the appropriate baud rate
@@ -102,15 +103,20 @@ class LivePlot():
         self.stop_event = threading.Event()  # Event to stop the thread
         self.pause_event = threading.Event()  # Event to pause the thread
 
-        self.read_thread = threading.Thread(target=self.readSerialData)
-        self.save_thread = threading.Thread(target=self.saveDataToFile)
-        self.read_thread.start()
-        self.save_thread.start()
+        self.startThreads()
         
         self.updatePlot()
 
+    def startThreads(self):
+        """Start the read and save threads"""
+        self.read_thread = threading.Thread(target=self.readSerialData)
+        self.save_thread = threading.Thread(target=self.saveDataToFile)
+        
+        self.read_thread.start()
+        self.save_thread.start()
+
     def readSerialData(self):
-        """Read data from serial in a separate thread."""
+        """Read data from serial in a separate thread"""
         while not self.stop_event.is_set():
             if self.ser.in_waiting >= self.NUM_SAMPLES:
                 data = self.ser.read(self.NUM_SAMPLES)
@@ -124,7 +130,7 @@ class LivePlot():
                 self.data_queue.put(samples)
 
     def saveDataToFile(self):
-        """Save data to file in a separate thread."""
+        """Save data to file in a separate thread"""
         with open('waveform_data.csv', 'a') as f:
             while not self.stop_event.is_set() or not self.data_queue.empty():
                 try:
@@ -135,7 +141,7 @@ class LivePlot():
                     pass
 
     def updatePlot(self):
-        """Update the plot with the latest data."""
+        """Update the plot with the latest data"""
         if self.sample_index > 0:
             self.ax.clear()
 
@@ -149,14 +155,14 @@ class LivePlot():
         self.root.after(1, self.updatePlot)
 
     def __del__(self):
-        """Cleanup resources and stop threads."""
+        """Cleanup resources and stop threads"""
         self.stop_event.set()  
         if self.ser and self.ser.is_open:  
             self.ser.close()
 
 class Benchmark():
     def __init__(self, root):
-        """Initialize Benchmark object."""
+        """Initialize Benchmark object"""
         self.root = root
         self.label_file_explorer = None
         self.fig = None
@@ -168,7 +174,7 @@ class Benchmark():
         self.filename = ""
 
     def browseFiles(self):
-        """Browse files to load data."""
+        """Browse files to load data"""
         self.filename = filedialog.askopenfilename(initialdir = "/",
                                             title = "Select a File",
                                             filetypes = (("Excel files",
@@ -180,7 +186,7 @@ class Benchmark():
         self.loadFromFile(self.filename)
     
     def loadFromFile(self, filename):
-        """Load data from file."""
+        """Load data from file"""
         try:
             with open(filename, 'r') as file:
                 self.data = []
@@ -193,7 +199,7 @@ class Benchmark():
             tk.messagebox.showerror("File Error", f"Could not load file: {e}")
     
     def plotData(self):
-        """Plot the loaded data."""
+        """Plot the loaded data"""
         if self.fig is None:
             self.fig = plt.Figure(figsize=(7, 4), dpi=100)
             self.ax = self.fig.add_subplot(111)
@@ -218,7 +224,7 @@ class Benchmark():
         self.canvas.draw()
 
     def benchmark(self):
-        """Create the benchmark menu."""
+        """Create the benchmark menu"""
         self.label_file_explorer = Label(self.root, 
                                     text = "File Explorer using Tkinter")
         

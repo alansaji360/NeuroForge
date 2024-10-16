@@ -1,5 +1,5 @@
 
-from button_styles import createButton, createGlowText
+from button_styles import ButtonStyles
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -30,22 +30,42 @@ class App():
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
         self.root.configure(bg=self.BG_COLOR)
         self.plot = None
+        self.root.title("NeuroForge")
+        # self.root.iconbitmap("neuroforge.ico")
+        self.root.resizable(True, True)
+
+        self.marker = 1
+
+        self.buttons = ButtonStyles(self.root)
 
         self.mainMenu()
 
     def callback(self):
         """Callback function to handle window close event."""
-        if self.plot is not None:
-            self.plot.__del__()
-        self.root.quit()     
-    
+        # if self.plot is not None:
+        #     self.plot.__del__()
+        # self.root.quit()   
+        if self.marker == 0: 
+            self.clearWindow()
+            self.mainMenu();
+        else:
+            self.onExit()
+
     def clearWindow(self):
         """Clear the window of all widgets."""
         for widget in self.root.winfo_children():
             widget.destroy()
 
+    def onExit(self):
+        """Exit the application."""
+        self.buttons.stopGlowAnimation()
+        self.root.quit()
+        exit()
+
     def toggleLivePlot(self):
         """Toggle the live plot window."""
+        self.marker = 0
+        self.buttons.stopGlowAnimation()
         self.clearWindow()
         with open('waveform_data.csv', 'w') as file:
             file.truncate(0)
@@ -54,22 +74,25 @@ class App():
 
     def toggleBenchmark(self):
         """Toggle the benchmark window."""
+        self.marker = 0
+        self.buttons.stopGlowAnimation()
         self.clearWindow()
         self.benchmark = Benchmark(self.root)
 
     def mainMenu(self):
         """Create the main menu."""
-        createGlowText(self.root, "NEUROFORGE", 50, 50, "#FF00FF", size=36)
+        if self.marker == 0:
+            self.marker = 1
 
-        createButton(self.root, "Start Live Plot",    50, 150, self.toggleLivePlot)
-        createButton(self.root, "Benchmark",          50, 250, self.toggleBenchmark)
-        createButton(self.root, "Exit",               50, 350, exit)
+        self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", size=36)
 
-        # Start the Tkinter main loop
+        self.buttons.createButton(self.root, "Start Live Plot",    self.toggleLivePlot)
+        self.buttons.createButton(self.root, "Benchmark",          self.toggleBenchmark)
+        self.buttons.createButton(self.root, "Exit",               exit)
+
         self.root.mainloop()
 
 class LivePlot():
-
     def __init__(self, root, n_channels = 1):
         """Initialize Live_Plot object"""
         self.root = root
@@ -109,24 +132,30 @@ class LivePlot():
 
         self.read_thread = threading.Thread(target=self.readSerialData)
         self.save_thread = threading.Thread(target=self.saveDataToFile)
-        self.read_thread.start()
-        self.save_thread.start()
         
         self.updatePlot()
+
+    def startThreads(self):
+        """Start the read and save threads"""
+        self.read_thread.start()
+        self.save_thread.start()
 
     def readSerialData(self):
         """Read data from serial in a separate thread."""
         while not self.stop_event.is_set():
-            if self.ser.in_waiting >= self.NUM_SAMPLES:
-                data = self.ser.read(self.NUM_SAMPLES)
-                samples = struct.unpack('<32H', data)  
-                
-                skip = int(self.NUM_SAMPLES / 2)
-                self.data_buffer[0][:-skip] = self.data_buffer[0][skip:]
-                self.data_buffer[0][-skip:] = samples
-                self.sample_index += skip
+            if self.ser is not None:    
+                if self.ser.in_waiting >= self.NUM_SAMPLES:
+                    data = self.ser.read(self.NUM_SAMPLES)
+                    samples = struct.unpack('<32H', data)  
+                    
+                    skip = int(self.NUM_SAMPLES / 2)
+                    self.data_buffer[0][:-skip] = self.data_buffer[0][skip:]
+                    self.data_buffer[0][-skip:] = samples
+                    self.sample_index += skip
 
-                self.data_queue.put(samples)
+                    self.data_queue.put(samples)
+            else:
+                self.stop_event.set()
 
     def saveDataToFile(self):
         """Save data to file in a separate thread."""
@@ -172,6 +201,8 @@ class Benchmark():
         self.SAMPLE_RATE = 18000
         self.filename = ""
 
+        self.buttons = ButtonStyles(self.root)
+
         self.benchmarkMenu()
 
     def browseFiles(self):
@@ -211,16 +242,33 @@ class Benchmark():
             toolbar = NavigationToolbar2Tk(self.canvas, self.root)
             toolbar.update()
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # self.ax.clear()
+
+        # self.ax.plot(self.data, color='b')
+        # self.ax.set_title('Loaded Data from File')
+        # self.ax.set_xlabel('Samples')
+        # self.ax.set_ylabel('Amplitude')
+
+        # self.ax.set_xlim(0, len(self.data))  
+        # self.ax.relim()  
+        # self.ax.autoscale_view() 
+
+        # self.canvas.draw()
+
         self.ax.clear()
+        self.ax.set_facecolor('#141414')  # Set the background color of the axes
 
-        self.ax.plot(self.data, color='b')
-        self.ax.set_title('Loaded Data from File')
-        self.ax.set_xlabel('Samples')
-        self.ax.set_ylabel('Amplitude')
+        self.ax.plot(self.data, color='cyan')  # Change line color to something bright
+        self.ax.set_title('Loaded Data from File', color='white')  # Title color
+        self.ax.set_xlabel('Samples', color='white')  # X-axis label color
+        self.ax.set_ylabel('Amplitude', color='white')  # Y-axis label color
 
-        self.ax.set_xlim(0, len(self.data))  
-        self.ax.relim()  
-        self.ax.autoscale_view() 
+        self.ax.set_xlim(0, len(self.data))
+        self.ax.relim()
+        self.ax.autoscale_view()
+
+        self.ax.tick_params(axis='both', colors='white')  # Change tick label color
+        self.ax.grid(color='gray', linestyle='--', linewidth=0.5)  # Grid color
 
         self.canvas.draw()
 
@@ -228,18 +276,8 @@ class Benchmark():
         """Create the benchmark menu."""
         self.label_file_explorer = Label(self.root, 
                                     text = "File Explorer using Tkinter")
-        
-        button_explore = Button(self.root, 
-                        text = "Browse Files",
-                        command = self.browseFiles)
-        button_explore.pack(expand=True)
 
-        button_exit = Button(self.root, 
-                     text = "Exit",
-                     command = exit) 
-        button_exit.pack(expand=True)
-        
-        self.label_file_explorer.pack(expand=True)
+        self.buttons.createButton(self.root, "Explore", self.browseFiles)
 
 if __name__ == '__main__':
     app = App()

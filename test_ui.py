@@ -21,7 +21,7 @@ from tkinter import ttk
 
 class App():
     def __init__(self):
-        """Initialize the App object."""
+        """Initialize the App object"""
         self.BG_COLOR = "#141414"
 
         self.root = None
@@ -31,7 +31,7 @@ class App():
         self.root.configure(bg=self.BG_COLOR)
         self.plot = None
         self.root.title("NeuroForge")
-        # self.root.iconbitmap("neuroforge.ico")
+        self.root.iconbitmap("samurai.ico")
         self.root.resizable(True, True)
 
         self.marker = 1
@@ -41,10 +41,7 @@ class App():
         self.mainMenu()
 
     def callback(self):
-        """Callback function to handle window close event."""
-        # if self.plot is not None:
-        #     self.plot.__del__()
-        # self.root.quit()   
+        """Callback function to handle window close event"""
         if self.marker == 0: 
             self.clearWindow()
             self.mainMenu();
@@ -52,12 +49,15 @@ class App():
             self.onExit()
 
     def clearWindow(self):
-        """Clear the window of all widgets."""
+        """Clear the window of all widgets"""
         for widget in self.root.winfo_children():
             widget.destroy()
 
     def onExit(self):
         """Exit the application."""
+        if self.plot is not None:
+            self.plot.__del__()
+
         self.buttons.stopGlowAnimation()
         self.root.quit()
         exit()
@@ -66,6 +66,7 @@ class App():
         """Toggle the live plot window."""
         self.marker = 0
         self.buttons.stopGlowAnimation()
+        time.sleep(0.5)
         self.clearWindow()
         with open('waveform_data.csv', 'w') as file:
             file.truncate(0)
@@ -76,6 +77,7 @@ class App():
         """Toggle the benchmark window."""
         self.marker = 0
         self.buttons.stopGlowAnimation()
+        time.sleep(0.5)
         self.clearWindow()
         self.benchmark = Benchmark(self.root)
 
@@ -84,11 +86,11 @@ class App():
         if self.marker == 0:
             self.marker = 1
 
-        self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", size=36)
+        self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
 
-        self.buttons.createButton(self.root, "Start Live Plot",    self.toggleLivePlot)
-        self.buttons.createButton(self.root, "Benchmark",          self.toggleBenchmark)
-        self.buttons.createButton(self.root, "Exit",               exit)
+        self.buttons.createButton(self.root, "Live Plot",   self.toggleLivePlot)
+        self.buttons.createButton(self.root, "Benchmark",   self.toggleBenchmark)
+        self.buttons.createButton(self.root, "Exit",        exit)
 
         self.root.mainloop()
 
@@ -141,7 +143,7 @@ class LivePlot():
         self.save_thread.start()
 
     def readSerialData(self):
-        """Read data from serial in a separate thread."""
+        """Read data from serial in a separate thread"""
         while not self.stop_event.is_set():
             if self.ser is not None:    
                 if self.ser.in_waiting >= self.NUM_SAMPLES:
@@ -158,8 +160,8 @@ class LivePlot():
                 self.stop_event.set()
 
     def saveDataToFile(self):
-        """Save data to file in a separate thread."""
-        with open('waveform_data.csv', 'a') as f:
+        """Save data to file in a separate thread"""
+        with open('cache.csv', 'a') as f:
             while not self.stop_event.is_set() or not self.data_queue.empty():
                 try:
                     samples = self.data_queue.get(timeout=1)
@@ -169,7 +171,7 @@ class LivePlot():
                     pass
 
     def updatePlot(self):
-        """Update the plot with the latest data."""
+        """Update the plot with the latest data"""
         if self.sample_index > 0:
             self.ax.clear()
 
@@ -183,14 +185,14 @@ class LivePlot():
         self.root.after(1, self.updatePlot)
 
     def __del__(self):
-        """Cleanup resources and stop threads."""
+        """Cleanup resources and stop threads"""
         self.stop_event.set()  
         if self.ser and self.ser.is_open:  
             self.ser.close()
 
 class Benchmark():
     def __init__(self, root):
-        """Initialize Benchmark object."""
+        """Initialize Benchmark object"""
         self.root = root
         self.label_file_explorer = None
         self.fig = None
@@ -206,7 +208,7 @@ class Benchmark():
         self.benchmarkMenu()
 
     def browseFiles(self):
-        """Browse files to load data."""
+        """Browse files to load data"""
         self.filename = filedialog.askopenfilename(initialdir = "/",
                                             title = "Select a File",
                                             filetypes = (("Excel files",
@@ -218,7 +220,7 @@ class Benchmark():
         self.loadFromFile(self.filename)
     
     def loadFromFile(self, filename):
-        """Load data from file."""
+        """Load data from file"""
         try:
             with open(filename, 'r') as file:
                 self.data = []
@@ -231,9 +233,9 @@ class Benchmark():
             tk.messagebox.showerror("File Error", f"Could not load file: {e}")
     
     def plotData(self):
-        """Plot the loaded data."""
+        """Plot the loaded data"""
         if self.fig is None:
-            self.fig = plt.Figure(figsize=(7, 4), dpi=100)
+            self.fig = plt.Figure(figsize=(7, 4), dpi=100, facecolor='#141414')
             self.ax = self.fig.add_subplot(111)
 
             self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
@@ -256,19 +258,19 @@ class Benchmark():
         # self.canvas.draw()
 
         self.ax.clear()
-        self.ax.set_facecolor('#141414')  # Set the background color of the axes
+        self.ax.set_facecolor('#141414') 
 
-        self.ax.plot(self.data, color='cyan')  # Change line color to something bright
-        self.ax.set_title('Loaded Data from File', color='white')  # Title color
-        self.ax.set_xlabel('Samples', color='white')  # X-axis label color
-        self.ax.set_ylabel('Amplitude', color='white')  # Y-axis label color
+        self.ax.plot(self.data, color='cyan') 
+        self.ax.set_title('Loaded Data from File', color='white')  
+        self.ax.set_xlabel('Samples', color='white') 
+        self.ax.set_ylabel('Amplitude', color='white') 
 
-        self.ax.set_xlim(0, len(self.data))
+        self.ax.set_xlim(0, len(self.data) if len(self.data) > 0 else 1)
         self.ax.relim()
         self.ax.autoscale_view()
 
-        self.ax.tick_params(axis='both', colors='white')  # Change tick label color
-        self.ax.grid(color='gray', linestyle='--', linewidth=0.5)  # Grid color
+        self.ax.tick_params(axis='both', colors='white') 
+        self.ax.grid(color='gray', linestyle='--', linewidth=0.5)  
 
         self.canvas.draw()
 
@@ -281,4 +283,3 @@ class Benchmark():
 
 if __name__ == '__main__':
     app = App()
-    app.mainMenu()

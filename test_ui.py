@@ -19,15 +19,67 @@ from tkinter import filedialog
 from tkinter import HORIZONTAL
 from tkinter import ttk
 
+class AnimatedSineWave:
+    def __init__(self, root):
+        """Initialize the sine wave animation."""
+        self.root = root
+
+        # Create a matplotlib figure with a black background
+        self.fig, self.ax = plt.subplots(facecolor='#141414')
+        self.ax.set_facecolor('black')
+        self.ax.get_xaxis().set_visible(False)  # Hide x-axis
+        self.ax.get_yaxis().set_visible(False)  # Hide y-axis
+        self.ax.axis('off')  # Remove borders and ticks
+
+        # Initialize the sine wave data
+        self.x = np.linspace(0, 10, 500)
+        self.y = np.sin(self.x)
+        self.line, = self.ax.plot(self.x, self.y, color='cyan', alpha=0.4, lw=2)
+
+        # Embed the plot into the Tkinter window
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas.get_tk_widget().place(relwidth=1, relheight=1)  # Cover the whole window
+
+        # Variables to control the animation
+        self.phase = 0  # Initial phase shift
+        self.animating = True  # Control flag for animation
+
+        # Start the animation thread
+        self.start_animation()
+
+    def update_wave(self):
+        """Update the sine wave for animation."""
+        if not self.animating:
+            return  # Stop updating if animation is off
+
+        # Increment the phase shift for oscillation
+        self.phase += 0.1
+        new_y = np.sin(self.x + self.phase)  # Oscillating sine wave
+
+        # Update the line data and redraw the plot
+        self.line.set_ydata(new_y)
+        self.canvas.draw()
+
+        # Schedule the next update
+        self.root.after(50, self.update_wave)  # 50ms delay for smooth animation
+
+    def start_animation(self):
+        """Start the animation."""
+        threading.Thread(target=self.update_wave, daemon=True).start()
+
+
 class App():
     def __init__(self):
         """Initialize the App object"""
         self.BG_COLOR = "#141414"
-
+        
         self.root = None
         self.root = tk.Tk()
         self.root.geometry("400x500")
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
+        
+        self.sine_wave = AnimatedSineWave(self.root)
+        
         self.root.configure(bg=self.BG_COLOR)
         self.plot = None
         self.root.title("NeuroForge")
@@ -35,6 +87,8 @@ class App():
         self.root.resizable(True, True)
 
         self.marker = 1
+
+       
 
         self.buttons = ButtonStyles(self.root)
 

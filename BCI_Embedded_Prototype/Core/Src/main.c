@@ -79,15 +79,27 @@ uint8_t* test_buffers[] = {
     USB_test_8
 };
 
+uint16_t live_read_packet[54];
+uint16_t unpacked_1[BUFFERSIZE];
+uint16_t unpacked_2[BUFFERSIZE];
+uint16_t unpacked_3[BUFFERSIZE];
+uint16_t* unpacked_buffers[] = {
+		unpacked_1,
+		unpacked_2,
+		unpacked_3
+};
+
 uint32_t start_time, end_time, elapsed_time;
 
 uint32_t dac_vals[BUFFERSIZE]; //dac buffer (may need to be larger for multiple output signals later
 uint8_t data_ready;
-uint8_t result = 0;
-uint8_t result_2 = 0;
+int result;
+int result_2;
 float frequency = 1.0;       // 1 Hz sine wave
 float amplitude = 1.0;       // Amplitude of 1
 float sample_rate = 100.0;   // 100 samples per second
+int package_counter = 0;
+int num_full_buffers_packed = 0;
 
 uint8_t entered_transfer = 0;
 extern USBD_HandleTypeDef hUsbDeviceFS;
@@ -97,6 +109,7 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 uint16_t check;
 uint8_t cnt;
 int track;
+int button_pressed = 0;
 
 // pointers to the half of the buffer being processed
 static volatile uint32_t* input_buffer_ptr;
@@ -166,27 +179,7 @@ void fill_test_buffers(void) {
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-//void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
-//{
-//	input_buffer_ptr = &adc_vals[0];
-//	output_buffer_ptr = &dac_vals[0];
-//
-//	check = 2;
-//
-//	data_ready = 1;
-//}
-//
-//void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-//{
-//	input_buffer_ptr = &adc_vals[DATASIZE];
-//	output_buffer_ptr = &dac_vals[DATASIZE];
-//
-//	check = 1;
-//
-//	data_ready = 1;
-//}
 uint8_t is_usb_connected(void) {
-//	hUsbDeviceHS.dev_state = 1;
     if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
         return 1; // USB is connected
     } else {
@@ -284,7 +277,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 	check = 1;
 
 	data_ready = 1;
-	CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals));
+//	CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals));
 }
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 {
@@ -295,6 +288,54 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 
 	data_ready = 1;
 //	CDC_Transmit_FS((uint8_t*)input_buffer_ptr, 0.5 * sizeof(adc_vals));
+}
+
+void package_point(uint16_t* final_packet_buffer, const uint16_t* unpacked_buffer, uint16_t identifier, int final_packet_pointer, int buffer_pointer, int num_points) {
+	uint16_t zero = 0;
+	final_packet_buffer[final_packet_pointer * (num_points + 2)] = zero;
+	final_packet_buffer[final_packet_pointer * (num_points + 2) + 1] = identifier;
+	for (int i = 0; i < num_points; i++) {
+		final_packet_buffer[final_packet_pointer * (num_points + 2) + 2 + i] = unpacked_buffer[buffer_pointer + i];
+	}
+//	final_packet_buffer[final_packet_pointer * 3 + 2] = unpacked_buffer[buffer_pointer];
+
+}
+
+void package_point_per_buffer(uint16_t* final_packet_buffer, uint16_t** unpacked_buffers, int num_unpacked_buffers, int buffer_pointer) {
+	for(int i = 0; i < num_unpacked_buffers; i++) {
+//		package_point(final_packet_buffer, unpacked_buffers[i], (uint16_t) i + 1, i, buffer_pointer);
+//		track++;
+	}
+}
+
+void package_several_points_per_buffer(uint16_t* final_packet_buffer, uint16_t** unpacked_buffers, int num_unpacked_buffers, int buffer_pointer, int num_points) {
+	for(int i = 0; i < num_unpacked_buffers; i++) {
+			package_point(final_packet_buffer, unpacked_buffers[i], (uint16_t) i + 1, i, buffer_pointer, num_points);
+	//		track++;
+		}
+}
+
+void fill_unpacked_buffers(uint16_t** unpacked_buffers, int num_unpacked_buffers) {
+	for(int i = 0; i < num_unpacked_buffers; i++) {
+		for (int j = 0; j < BUFFERSIZE; j++) {
+//			unpacked_buffers[i][j] = j * 10 + i;
+			unpacked_buffers[i][j] = i * 1000 + 500;
+		}
+	}
+}
+
+void wait_for_button_press(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin) {
+    // Wait until the button is pressed (assuming active-low button, meaning pressed is 0)
+	while (HAL_GPIO_ReadPin(GPIOx, GPIO_Pin) == GPIO_PIN_RESET) {
+	        // Optionally add a small delay to avoid busy waiting
+	        HAL_Delay(50);
+	    }
+	    // Optionally, wait for the button to be released
+	    while (HAL_GPIO_ReadPin(GPIOx, GPIO_Pin) == GPIO_PIN_SET) {
+	        HAL_Delay(50);
+	    }
+	HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_11); // Toggle the green LED
+    button_pressed = 1;
 }
 
 
@@ -339,35 +380,52 @@ int main(void)
   HAL_TIM_Base_Start(&htim6);
   HAL_ADC_Start_DMA(&hadc1, (uint16_t *) adc_vals, BUFFERSIZE);
   fill_test_buffers();
-//  HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *) dac_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
   HAL_Delay(5000);
 
-//  data_transfer_USB();
-//  EMA_Init(&filter, 0.01);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-//  if(hUsbDeviceFS == USBD_STATE_CONFIGURED)
-//  {
-//	  uint8_t state_test = 1;
-//  }
-  	while (!is_usb_connected()) {
-  		  HAL_Delay(100);
-  	  }
+//  	while (!is_usb_connected()) {
+//  		  HAL_Delay(100);
+//  	  }
+    fill_unpacked_buffers(unpacked_buffers, 3);
+//  	package_point_per_buffer(live_read_packet, unpacked_buffers, 3, 0);
+  	package_several_points_per_buffer(live_read_packet, unpacked_buffers, 3, package_counter, 16);
+
+//    for(int i = 0; i < BUFFERSIZE; i++) {
+//        	adc_vals[i] = 8;
+//        }
+    wait_for_button_press(GPIOA, GPIO_PIN_0);
 
   	start_time = HAL_GetTick();
-
+  	HAL_Delay(1);
+//  	result = CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+//  	result_2 = CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals));
 //  	transfer_all_buffers();
   	end_time = HAL_GetTick();
   	elapsed_time = end_time - start_time;
   	printf("Elapsed time: %u\n", elapsed_time);
-  	generate_sine_wave(frequency, amplitude, sample_rate, adc_vals, BUFFERSIZE);
+//  	generate_sine_wave(frequency, amplitude, sample_rate, adc_vals, BUFFERSIZE);
 
 
   while (1)
   {
+	  if(package_counter >= BUFFERSIZE) {
+	  		  package_counter = 0;
+	  		  num_full_buffers_packed++;
+	  }
+//	  	for(int i = 0; i < 16; i++) {
+//	  		package_point_per_buffer(live_read_packet, unpacked_buffers, 3, package_counter);
+//	  		package_counter++;
+//	  	}
+	  	package_several_points_per_buffer(live_read_packet, unpacked_buffers, 3, package_counter, 16);
+	  	package_counter += 16;
+	  	result = CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+	  	HAL_Delay(5);
+//	  	package_counter++;
 
 //	  transfer_all_buffers();
 //	while (!is_usb_connected()) {
@@ -390,6 +448,8 @@ int main(void)
 	  uint32_t value = 1234;  // Example uint32_t value
 //	  CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals));
 //	  send_sine_wave_data();
+//	  result = CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+
 	  HAL_Delay(2);
 //	sendBufferOverUSB(adc_vals, BUFFERSIZE); // Send the buffer over USB
 //	send_raw_adc_data(adc_vals, BUFFERSIZE);

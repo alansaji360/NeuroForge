@@ -28,6 +28,7 @@ class App():
 
     def toggleLivePlot(self):
         self.clearWindow()
+        time.sleep(0.5)
         self.plot = Live_Plot(self.root, n_channels=1)
 
     def start(self):

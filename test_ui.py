@@ -19,55 +19,6 @@ from tkinter import filedialog
 from tkinter import HORIZONTAL
 from tkinter import ttk
 
-class AnimatedSineWave:
-    def __init__(self, root):
-        """Initialize the sine wave animation."""
-        self.root = root
-
-        # Create a matplotlib figure with a black background
-        self.fig, self.ax = plt.subplots(facecolor='#141414')
-        self.ax.set_facecolor('black')
-        self.ax.get_xaxis().set_visible(False)  # Hide x-axis
-        self.ax.get_yaxis().set_visible(False)  # Hide y-axis
-        self.ax.axis('off')  # Remove borders and ticks
-
-        # Initialize the sine wave data
-        self.x = np.linspace(0, 10, 500)
-        self.y = np.sin(self.x)
-        self.line, = self.ax.plot(self.x, self.y, color='cyan', alpha=0.4, lw=2)
-
-        # Embed the plot into the Tkinter window
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().place(relwidth=1, relheight=1)  # Cover the whole window
-
-        # Variables to control the animation
-        self.phase = 0  # Initial phase shift
-        self.animating = True  # Control flag for animation
-
-        # Start the animation thread
-        self.start_animation()
-
-    def update_wave(self):
-        """Update the sine wave for animation."""
-        if not self.animating:
-            return  # Stop updating if animation is off
-
-        # Increment the phase shift for oscillation
-        self.phase += 0.1
-        new_y = np.sin(self.x + self.phase)  # Oscillating sine wave
-
-        # Update the line data and redraw the plot
-        self.line.set_ydata(new_y)
-        self.canvas.draw()
-
-        # Schedule the next update
-        self.root.after(50, self.update_wave)  # 50ms delay for smooth animation
-
-    def start_animation(self):
-        """Start the animation."""
-        threading.Thread(target=self.update_wave, daemon=True).start()
-
-
 class App():
     def __init__(self):
         """Initialize the App object"""
@@ -78,8 +29,6 @@ class App():
         self.root.geometry("400x500")
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
         
-        self.sine_wave = AnimatedSineWave(self.root)
-        
         self.root.configure(bg=self.BG_COLOR)
         self.plot = None
         self.root.title("NeuroForge")
@@ -87,9 +36,6 @@ class App():
         self.root.resizable(True, True)
 
         self.marker = 1
-
-       
-
         self.buttons = ButtonStyles(self.root)
 
         self.mainMenu()
@@ -97,6 +43,8 @@ class App():
     def callback(self):
         """Callback function to handle window close event"""
         if self.marker == 0: 
+            if self.plot is not None:
+                self.plot.__del__()
             self.clearWindow()
             self.mainMenu();
         else:
@@ -112,7 +60,7 @@ class App():
         if self.plot is not None:
             self.plot.__del__()
 
-        self.buttons.stopGlowAnimation()
+        # self.buttons.stopGlowAnimation()
         self.root.quit()
         exit()
 
@@ -140,7 +88,7 @@ class App():
         if self.marker == 0:
             self.marker = 1
 
-        self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
+        # self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
 
         self.buttons.createButton(self.root, "Live Plot",   self.toggleLivePlot)
         self.buttons.createButton(self.root, "Benchmark",   self.toggleBenchmark)
@@ -153,22 +101,31 @@ class LivePlot():
         """Initialize Live_Plot object"""
         self.root = root
         
-        self.COM_PORT = 'COM3'          # Change to your COM port
-        self.BAUD_RATE = 115200         # Change to the appropriate baud rate
-        self.NUM_SAMPLES = 64           # Number of bytes to read (32 bytes = 16 samples)
-        self.SAMPLE_RATE = 18000        # Define the sampling rate (Hz)
-        self.NUM_CHANNELS = n_channels  # Number of channels to read
-        self.BUFFER_SIZE = 20480        # Buffer size
-        self.Y_MIN = -1000              # Minimum y-axis value
-        self.Y_MAX = 4500               # Maximum y-axis value
-        
+        self.COM_PORT = 'COM3'                          # Change to your COM port
+        self.BAUD_RATE = 115200                         # Change to the appropriate baud rate
+        self.NUM_SAMPLES = 64                           # Number of bytes to read (32 bytes = 16 samples)
+        self.SAMPLE_RATE = 18000                        # Define the sampling rate (Hz)
+        self.NUM_CHANNELS = 1                           # Number of channels to read
+        self.BUFFER_SIZE = self.SAMPLE_RATE*2           # Buffer size
+        self.Y_MIN = -1000                              # Maximum y-axis value
+        self.Y_MAX = 4500                               # Maximum y-axis value
+
         self.fig, self.ax = plt.subplots(self.NUM_CHANNELS, figsize=(50, 20), dpi=100)
+        # if self.NUM_CHANNELS == 1:
+        #             self.ax = [self.ax]  # Convert to list if only one channel
+
         self.canvas = FigureCanvasTkAgg (self.fig, master=self.root)
         self.canvas.get_tk_widget().pack()
         
         # self.data_buffer = [np.zeros(100) for _ in range(self.NUM_CHANNELS)]  # Initialize buffers for 100 samples
         self.data_buffer = np.zeros((self.NUM_CHANNELS, self.BUFFER_SIZE))
-        
+
+        self.alpha_buffer = np.zeros(self.BUFFER_SIZE)
+        self.beta_buffer = np.zeros(self.BUFFER_SIZE)
+        self.gamma_buffer = np.zeros(self.BUFFER_SIZE)
+
+        # self.colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
         try:
             self.ser = serial.Serial(self.COM_PORT, self.BAUD_RATE, timeout=1)
             self.ser.set_buffer_size(rx_size=8192, tx_size=8192)
@@ -177,7 +134,15 @@ class LivePlot():
             tk.messagebox.showerror("Serial Error", f"Could not open serial port: {e}")
             self.ser = None
 
-        self.sample_index = 0
+        self.sample_index = [0] * 3
+
+
+        # self.type = 1
+        self.colors = {"alpha": "b", "beta": "g", "gamma": "r"}
+        self.plot_alpha = False
+        self.plot_beta = False
+        self.plot_gamma = False
+        
         self.data_queue = queue.Queue()
 
         self.info = mne.create_info(ch_names=['Channel 1'], sfreq=self.SAMPLE_RATE, ch_types=['eeg'])
@@ -186,33 +151,87 @@ class LivePlot():
         self.stop_event = threading.Event()  # Event to stop the thread
         self.pause_event = threading.Event()  # Event to pause the thread
 
-        self.read_thread = threading.Thread(target=self.readSerialData)
-        self.save_thread = threading.Thread(target=self.saveDataToFile)
+        self.startThreads()
         
         self.updatePlot()
 
     def startThreads(self):
         """Start the read and save threads"""
+        self.read_thread = threading.Thread(target=self.readSerialData)
+        self.save_thread = threading.Thread(target=self.saveDataToFile)
+        
         self.read_thread.start()
         self.save_thread.start()
 
     def readSerialData(self):
         """Read data from serial in a separate thread"""
+        # while not self.stop_event.is_set():
+        #     if self.ser.in_waiting >= self.NUM_SAMPLES:
+        #         data = self.ser.read(self.NUM_SAMPLES)
+        #         samples = struct.unpack('<32H', data)  
+                
+        #         skip = int(self.NUM_SAMPLES / 2)
+        #         self.data_buffer[0][:-skip] = self.data_buffer[0][skip:]
+        #         self.data_buffer[0][-skip:] = samples
+        #         self.sample_index += skip
+
+        #         self.data_queue.put(samples)
+
+        frame_size = 36  # 3 uint16 (2 bytes each)
+
         while not self.stop_event.is_set():
-            if self.ser is not None:    
-                if self.ser.in_waiting >= self.NUM_SAMPLES:
-                    data = self.ser.read(self.NUM_SAMPLES)
-                    samples = struct.unpack('<32H', data)  
+            if self.ser is not None:
+                if self.ser.in_waiting >= frame_size:
+                    frame = self.ser.read(frame_size)
                     
-                    skip = int(self.NUM_SAMPLES / 2)
-                    self.data_buffer[0][:-skip] = self.data_buffer[0][skip:]
-                    self.data_buffer[0][-skip:] = samples
-                    self.sample_index += skip
+                    # Unpack the frame
+                    # header, wave_type, sample_value = struct.unpack('<18H', frame)
 
-                    self.data_queue.put(samples)
-            else:
-                self.stop_event.set()
+                    data = struct.unpack('<18H', frame)
 
+                    # Extract the header and wave type
+                    header = data[0]  # First uint16 for header
+                    wave_type = data[1]  # Second uint16 for wave type
+                    data = data[2:]  # Remaining 14 uint16 for sample values
+                    
+                    # Print debug information
+                    print(f"Header: {header}, Wave Type: {wave_type}")
+
+                    # Ensure the header is 0
+                    if header == 0:
+                        # Update the buffers based on wave type
+                        if wave_type == 1:  # Alpha wave
+                            self.alpha_buffer[:-16] = self.alpha_buffer[16:]
+                            self.alpha_buffer[-16:] = data
+                            # self.sample_index += skip
+                    
+                            # self.alpha_buffer[self.sample_index[0]] = sample_value
+                            # self.sample_index[0] = (self.sample_index[0] + 1) % self.BUFFER_SIZE
+                            # print("Alpha wave detected")
+
+                        elif wave_type == 2:  # Beta wave
+                            self.beta_buffer[:-16] = self.beta_buffer[16:]
+                            self.beta_buffer[-16:] = data
+
+                            # self.beta_buffer[self.sample_index[1]] = sample_value
+                            # self.sample_index[1] = (self.sample_index[1] + 1) % self.BUFFER_SIZE
+                            # print("Beta wave detected")
+
+                        elif wave_type == 3:  # Gamma wave
+                            self.gamma_buffer[:-16] = self.gamma_buffer[16:]
+                            self.gamma_buffer[-16:] = data
+
+                            # self.gamma_buffer[self.sample_index[2]] = sample_value
+                            # self.sample_index[2] = (self.sample_index[2] + 1) % self.BUFFER_SIZE
+                            # print("Gamma wave detected")
+
+                        # Update the sample index and wrap it around
+                        
+
+                        # print("Current Buffers:")
+                        # print(f"Alpha: {self.alpha_buffer[:10]}")  # Print first 10 values for quick check
+                        # print(f"Beta: {self.beta_buffer[:10]}")
+                        # print(f"Gamma: {self.gamma_buffer[:10]}")
     def saveDataToFile(self):
         """Save data to file in a separate thread"""
         with open('cache.csv', 'a') as f:
@@ -223,19 +242,40 @@ class LivePlot():
                     f.flush() 
                 except queue.Empty:
                     pass
+    
+    def shift_and_update(self, buffer, new_value):
+        """Shift data in the buffer and add the new value."""
+        buffer[:-1] = buffer[1:]
+        buffer[-1] = new_value
 
     def updatePlot(self):
         """Update the plot with the latest data"""
-        if self.sample_index > 0:
-            self.ax.clear()
+        # if self.sample_index > 0:
+        #     self.ax.clear()
 
-            self.ax.plot(self.data_buffer[0], color='b')
-            self.ax.set_title(f"Channel {self.NUM_CHANNELS}")
-            self.ax.set_xlabel('Samples')
-            self.ax.set_ylabel('Amplitude')
-            self.ax.set_ylim(self.Y_MIN, self.Y_MAX)
+        #     self.ax.plot(self.data_buffer[0], color='b')
+        #     self.ax.set_title(f"Channel {self.NUM_CHANNELS}")
+        #     self.ax.set_xlabel('Samples')
+        #     self.ax.set_ylabel('Amplitude')
+        #     self.ax.set_ylim(-1000, 4500)
 
-            self.canvas.draw()
+        #     self.canvas.draw()
+        # self.root.after(1, self.updatePlot)
+
+        self.ax.clear()
+
+        # Plot each wave type
+        self.ax.plot(self.alpha_buffer, color='b', label="Alpha")
+        self.ax.plot(self.beta_buffer, color='g', label="Beta")
+        self.ax.plot(self.gamma_buffer, color='r', label="Gamma")
+
+        self.ax.set_title("Alpha, Beta, and Gamma Waves")
+        self.ax.set_xlabel('Samples')
+        self.ax.set_ylabel('Amplitude')
+        self.ax.set_ylim(self.Y_MIN, self.Y_MAX)
+        self.ax.legend()
+
+        self.canvas.draw()
         self.root.after(1, self.updatePlot)
 
     def __del__(self):

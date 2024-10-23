@@ -13,5 +13,5 @@ RipperQuantumCoreMindCortexDocSynapse-inator_2000
     ,gPPR8b           ,ad8""
    dP:::::Yb      ,ad8""
    8):::::(8  ,ad8""
-   Yb:;;;:d888"" 
+   Yb:;;;:d888""
     "8ggg8P"    

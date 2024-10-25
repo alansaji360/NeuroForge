@@ -88,7 +88,7 @@ class App():
         if self.marker == 0:
             self.marker = 1
 
-        # self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
+        self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
 
         self.buttons.createButton(self.root, "Live Plot",   self.toggleLivePlot)
         self.buttons.createButton(self.root, "Benchmark",   self.toggleBenchmark)
@@ -101,14 +101,14 @@ class LivePlot():
         """Initialize Live_Plot object"""
         self.root = root
         
-        self.COM_PORT = 'COM3'                          # Change to your COM port
+        self.COM_PORT = 'COM5'                          # Change to your COM port
         self.BAUD_RATE = 115200                         # Change to the appropriate baud rate
         self.NUM_SAMPLES = 64                           # Number of bytes to read (32 bytes = 16 samples)
         self.SAMPLE_RATE = 18000                        # Define the sampling rate (Hz)
-        self.NUM_CHANNELS = 1                           # Number of channels to read
-        self.BUFFER_SIZE = self.SAMPLE_RATE*2           # Buffer size
+        self.NUM_CHANNELS = n_channels                  # Number of channels to read
+        self.BUFFER_SIZE = 20480                        # Buffer size
         self.Y_MIN = -1000                              # Maximum y-axis value
-        self.Y_MAX = 4500                               # Maximum y-axis value
+        self.Y_MAX = 6000                               # Maximum y-axis value
 
         self.fig, self.ax = plt.subplots(self.NUM_CHANNELS, figsize=(50, 20), dpi=100)
         # if self.NUM_CHANNELS == 1:
@@ -124,7 +124,16 @@ class LivePlot():
         self.beta_buffer = np.zeros(self.BUFFER_SIZE)
         self.gamma_buffer = np.zeros(self.BUFFER_SIZE)
 
-        # self.colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        self.buffers = {
+            ch: {
+                'alpha': np.zeros(self.BUFFER_SIZE),
+                'beta': np.zeros(self.BUFFER_SIZE),
+                'gamma': np.zeros(self.BUFFER_SIZE)
+            }
+            for ch in range(self.NUM_CHANNELS)
+        }
+
+        self.enable = 1
 
         try:
             self.ser = serial.Serial(self.COM_PORT, self.BAUD_RATE, timeout=1)
@@ -133,17 +142,26 @@ class LivePlot():
             print(f"Error: {e}")
             tk.messagebox.showerror("Serial Error", f"Could not open serial port: {e}")
             self.ser = None
+            self.enable = 0
 
         self.sample_index = [0] * 3
+        # self.sample_index = {ch: 0 for ch in range(n_channels)}
 
-
-        # self.type = 1
         self.colors = {"alpha": "b", "beta": "g", "gamma": "r"}
         self.plot_alpha = False
         self.plot_beta = False
         self.plot_gamma = False
         
-        self.data_queue = queue.Queue()
+        self._queue = queue.Queue()
+
+        self.data_queue = {
+            ch: {
+                'alpha': queue.Queue(),
+                'beta': queue.Queue(),
+                'gamma': queue.Queue()
+            }
+            for ch in range(self.NUM_CHANNELS)
+        }
 
         self.info = mne.create_info(ch_names=['Channel 1'], sfreq=self.SAMPLE_RATE, ch_types=['eeg'])
         self.raw = mne.io.RawArray(self.data_buffer, self.info)
@@ -151,9 +169,9 @@ class LivePlot():
         self.stop_event = threading.Event()  # Event to stop the thread
         self.pause_event = threading.Event()  # Event to pause the thread
 
-        self.startThreads()
-        
-        self.updatePlot()
+        if self.enable:
+            self.startThreads()
+            self.updatePlot()
 
     def startThreads(self):
         """Start the read and save threads"""
@@ -165,83 +183,88 @@ class LivePlot():
 
     def readSerialData(self):
         """Read data from serial in a separate thread"""
-        # while not self.stop_event.is_set():
-        #     if self.ser.in_waiting >= self.NUM_SAMPLES:
-        #         data = self.ser.read(self.NUM_SAMPLES)
-        #         samples = struct.unpack('<32H', data)  
-                
-        #         skip = int(self.NUM_SAMPLES / 2)
-        #         self.data_buffer[0][:-skip] = self.data_buffer[0][skip:]
-        #         self.data_buffer[0][-skip:] = samples
-        #         self.sample_index += skip
 
-        #         self.data_queue.put(samples)
-
-        frame_size = 36  # 3 uint16 (2 bytes each)
+        frame_size = 36  # 3 uint16 (2 bytes each) * 6
+        #frame_size = 48 # 4 uint16 (2 bytes each) * 6
 
         while not self.stop_event.is_set():
             if self.ser is not None:
                 if self.ser.in_waiting >= frame_size:
                     frame = self.ser.read(frame_size)
-                    
-                    # Unpack the frame
-                    # header, wave_type, sample_value = struct.unpack('<18H', frame)
+        
 
-                    data = struct.unpack('<18H', frame)
+                    data = struct.unpack('<18H', frame) 
+                    #data = struct.unpack('<24H', frame)
 
-                    # Extract the header and wave type
                     header = data[0]  # First uint16 for header
                     wave_type = data[1]  # Second uint16 for wave type
+                    #channel = data[2]  # Third uint16 for channel
                     data = data[2:]  # Remaining 14 uint16 for sample values
                     
                     # Print debug information
-                    print(f"Header: {header}, Wave Type: {wave_type}")
+                    # print(f"Header: {header} Wave Type: {wave_type} Channel: {channel} Data: {data}")
 
-                    # Ensure the header is 0
+                    # if header == 0 and channel_id in self.buffers:
+                        # wave_name = self.get_wave_name(wave_type)
+
+                        # if wave_name:
+                        #     buffer = self.buffers[channel_id][wave_name]
+                        #     idx = self.sample_index[channel_id]
+
+                        #     # Update buffer with new samples
+                        #     buffer[idx:idx + 14] = samples
+                        #     self.sample_index[channel_id] = (idx + 14) % self.BUFFER_SIZE
+                        
                     if header == 0:
                         # Update the buffers based on wave type
                         if wave_type == 1:  # Alpha wave
                             self.alpha_buffer[:-16] = self.alpha_buffer[16:]
                             self.alpha_buffer[-16:] = data
-                            # self.sample_index += skip
-                    
-                            # self.alpha_buffer[self.sample_index[0]] = sample_value
-                            # self.sample_index[0] = (self.sample_index[0] + 1) % self.BUFFER_SIZE
-                            # print("Alpha wave detected")
 
                         elif wave_type == 2:  # Beta wave
                             self.beta_buffer[:-16] = self.beta_buffer[16:]
                             self.beta_buffer[-16:] = data
-
-                            # self.beta_buffer[self.sample_index[1]] = sample_value
-                            # self.sample_index[1] = (self.sample_index[1] + 1) % self.BUFFER_SIZE
-                            # print("Beta wave detected")
-
+                            
                         elif wave_type == 3:  # Gamma wave
                             self.gamma_buffer[:-16] = self.gamma_buffer[16:]
                             self.gamma_buffer[-16:] = data
 
-                            # self.gamma_buffer[self.sample_index[2]] = sample_value
-                            # self.sample_index[2] = (self.sample_index[2] + 1) % self.BUFFER_SIZE
-                            # print("Gamma wave detected")
+                    # print("Current Buffers:")
+                    # print(f"Alpha: {self.alpha_buffer[:10]}")  # Print first 10 values for quick check
+                    # print(f"Beta: {self.beta_buffer[:10]}")
+                    # print(f"Gamma: {self.gamma_buffer[:10]}")
 
-                        # Update the sample index and wrap it around
-                        
-
-                        # print("Current Buffers:")
-                        # print(f"Alpha: {self.alpha_buffer[:10]}")  # Print first 10 values for quick check
-                        # print(f"Beta: {self.beta_buffer[:10]}")
-                        # print(f"Gamma: {self.gamma_buffer[:10]}")
+    def get_wave_name(self, wave_type):
+        """Map wave type to wave name."""
+        return {1: 'alpha', 2: 'beta', 3: 'gamma'}.get(wave_type)
+    
     def saveDataToFile(self):
-        """Save data to file in a separate thread"""
-        with open('cache.csv', 'a') as f:
-            while not self.stop_event.is_set() or not self.data_queue.empty():
-                try:
-                    samples = self.data_queue.get(timeout=1)
-                    f.write(','.join(map(str, samples)) + '\n')
-                    f.flush() 
-                except queue.Empty:
-                    pass
+        """Save all data to a single CSV file with clear separation."""
+        with open('all_channels_data.csv', 'a') as f:
+            # Write a header for the CSV file (only once)
+            f.write("timestamp,channel,wave_type,samples\n")
+
+            while not self.stop_event.is_set():
+                for ch in range(self.NUM_CHANNELS):
+                    for wave_type in ['alpha', 'beta', 'gamma']:
+                        try:
+                            # Get the samples from the queue
+                            samples = self.data_queue[ch][wave_type].get(timeout=1)
+
+                            # Format the row with channel, wave type, and sample data
+                            row = (
+                                f"{time.time()},{ch},{wave_type},"
+                                + ','.join(map(str, samples))
+                                + '\n'
+                            )
+
+                            # Write the row to the file
+                            f.write(row)
+                            f.flush()  # Ensure the data is saved immediately
+
+                        except queue.Empty:
+                            # If no data available, continue to the next queue
+                            continue
     
     def shift_and_update(self, buffer, new_value):
         """Shift data in the buffer and add the new value."""
@@ -277,6 +300,26 @@ class LivePlot():
 
         self.canvas.draw()
         self.root.after(1, self.updatePlot)
+
+        # self.ax.clear()  # Clear the plot
+
+        # for ch in range(self.n_channels):
+        #     alpha_data = self.buffers[ch]['alpha']
+        #     beta_data = self.buffers[ch]['beta']
+        #     gamma_data = self.buffers[ch]['gamma']
+
+        #     # Plot each wave type with a different color
+        #     self.ax.plot(alpha_data, label=f'Alpha (Ch {ch})', color='blue')
+        #     self.ax.plot(beta_data, label=f'Beta (Ch {ch})', color='green')
+        #     self.ax.plot(gamma_data, label=f'Gamma (Ch {ch})', color='red')
+
+        # self.ax.set_ylim(-1000, 4500)  # Adjust based on signal range
+        # self.ax.set_title("Real-Time EEG Data (Multi-Channel)")
+        # self.ax.set_xlabel("Samples")
+        # self.ax.set_ylabel("Amplitude")
+        # self.ax.legend()
+        # self.canvas.draw()
+
 
     def __del__(self):
         """Cleanup resources and stop threads"""

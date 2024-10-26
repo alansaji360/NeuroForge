@@ -64,7 +64,6 @@ USBD_HandleTypeDef hUsbDeviceFS;
 void MX_USB_DEVICE_Init(void)
 {
   /* USER CODE BEGIN USB_DEVICE_Init_PreTreatment */
-
   /* USER CODE END USB_DEVICE_Init_PreTreatment */
 
   /* Init Device Library, add supported class and start the library. */
@@ -72,14 +71,23 @@ void MX_USB_DEVICE_Init(void)
   {
     Error_Handler();
   }
+//  HAL_Delay(500);
+  // THIS SHIT RETRIES IT AND FUCKS IT UP. HAVE TO START THE CONNECTION AFTER EVERYTHING IS DONE.
+  // LIST OF THIGNS TO TRY:
+  // potentially disable the DM pin before calling as well.
+  // look inside USBD_Init and figure out what exactly starts the handshake.
   if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_CDC) != USBD_OK)
   {
     Error_Handler();
   }
+//  HAL_Delay(500);
+
   if (USBD_CDC_RegisterInterface(&hUsbDeviceFS, &USBD_Interface_fops_FS) != USBD_OK)
   {
     Error_Handler();
   }
+//  HAL_Delay(500);
+
   if (USBD_Start(&hUsbDeviceFS) != USBD_OK)
   {
     Error_Handler();

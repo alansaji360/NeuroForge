@@ -338,6 +338,8 @@ void wait_for_button_press(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin) {
     button_pressed = 1;
 }
 
+int aux_retrigger_usb();
+
 
 /* USER CODE END 0 */
 
@@ -374,14 +376,17 @@ int main(void)
   MX_SPI1_Init();
   MX_ADC1_Init();
   MX_TIM6_Init();
-  MX_USB_DEVICE_Init();
+//  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   // START TIME BASE AND DMA CHANNELS
   HAL_TIM_Base_Start(&htim6);
   HAL_ADC_Start_DMA(&hadc1, (uint16_t *) adc_vals, BUFFERSIZE);
   fill_test_buffers();
-  HAL_Delay(5000);
+  HAL_Delay(2000);
 
+//  wait_for_button_press(GPIOA, GPIO_PIN_0);
+
+//  MX_USB_DEVICE_Init();
 
   /* USER CODE END 2 */
 
@@ -391,14 +396,17 @@ int main(void)
 //  	while (!is_usb_connected()) {
 //  		  HAL_Delay(100);
 //  	  }
-    fill_unpacked_buffers(unpacked_buffers, 3);
+//    fill_unpacked_buffers(unpacked_buffers, 3);
 //  	package_point_per_buffer(live_read_packet, unpacked_buffers, 3, 0);
-  	package_several_points_per_buffer(live_read_packet, unpacked_buffers, 3, package_counter, 16);
+//  	package_several_points_per_buffer(live_read_packet, unpacked_buffers, 3, package_counter, 16);
 
 //    for(int i = 0; i < BUFFERSIZE; i++) {
 //        	adc_vals[i] = 8;
 //        }
-    wait_for_button_press(GPIOA, GPIO_PIN_0);
+//    wait_for_button_press(GPIOA, GPIO_PIN_0);
+    aux_retrigger_usb();
+//    MX_USB_DEVICE_Init();
+
 
   	start_time = HAL_GetTick();
   	HAL_Delay(1);
@@ -514,6 +522,99 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+int aux_retrigger_usb()
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // Configure PA12 (USB_DP) as output push-pull to simulate disconnect
+    GPIO_InitStructure.Pin = GPIO_PIN_12;
+    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStructure.Pull = GPIO_NOPULL;
+    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // Drive PA12 low to simulate disconnect
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
+
+    // Delay to ensure the host detects the disconnect
+    HAL_Delay(100);
+
+    // Reconfigure PA12 as USB DP (Alternate Function)
+    GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // Initialize USB Device
+    MX_USB_DEVICE_Init();
+
+    // Start the USB device
+    USBD_Start(&hUsbDeviceFS);
+
+    return 1;
+}
+//int     aux_retrigger_usb()
+//{
+//        GPIO_InitTypeDef  GPIO_InitStructure;
+//
+//        // ST USB Function
+////        PowerOff();
+////        USBD_Stop(&hUsbDeviceFS);
+//        GPIO_InitStructure.Pin = GPIO_PIN_12 | GPIO_PIN_11;
+//        GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+//        GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+////        GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+//
+//        GPIO_InitStructure.Pull = GPIO_NOPULL;
+////        GPIO_InitStructure.Pull = GPIO_NOPULL;
+//
+//
+////        GPIO_Init(GPIOA, &GPIO_InitStructure);
+//        HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+//        // Set USB_DP to 0
+//
+////        GPIOA->BRR  |= GPIO_PIN_12 ;
+////
+////        // Wait for for minimum 32* 50msec ,  1,6 secs
+////        while(tim3_cnt%32!=0) ; while(tim3_cnt%32!=31) ;
+//        HAL_Delay(2000);
+//
+//        // ST USB Functions
+////        PowerOn();
+////        USB_Init();
+////        Virtual_Com_Port_Reset() ;
+////        MX_USB_DEVICE_Init();
+//
+////        USBD_Start(&hUsbDeviceFS);
+////        USBD_DeInit(&hUsbDeviceFS);
+////        USBD_Start(&hUsbDeviceFS);
+//
+//        MX_USB_DEVICE_Init();
+//        HAL_Delay(1000);
+////        USBD_Start(&hUsbDeviceFS);
+//
+//
+//
+//
+//        // Program Pin 12 USB_DP from Output to input
+//        memset(&GPIO_InitStructure, 0, sizeof(GPIO_InitStructure));
+//
+//
+//        GPIO_InitStructure.Pin = GPIO_PIN_12 | GPIO_PIN_11;
+////        GPIO_InitStructure.Pin = GPIO_PIN_11;
+//
+//        GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+//        GPIO_InitStructure.Mode = GPIO_MODE_AF_PP; // Alternate function push-pull mode
+//        GPIO_InitStructure.Pull = GPIO_NOPULL;
+//
+//        HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+//
+////        USBD_Start(&hUsbDeviceFS);
+////        MX_USB_DEVICE_Init();
+////        HAL_Delay(1000);
+//
+//
+//        return 1 ;
+//}
 
 /* USER CODE END 4 */
 

@@ -29,11 +29,14 @@
 #include "tim.h"
 #include "tsc.h"
 #include "usart.h"
-#include "usb.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usb_device.h"
+#include "usbd_cdc_if.h"
+#include "usbd_core.h"
 
 /* USER CODE END Includes */
 
@@ -77,6 +80,8 @@ __IO uint32_t InjChannel = 0;
 
 static volatile uint16_t* input_buffer_ptr = &adc_vals[0];
 static volatile uint16_t* output_buffer_ptr;
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,6 +107,30 @@ void SystemClock_Config(void);
 //
 //	data_ready = 1;
 //}
+void fill_buffer(uint16_t *buffer, size_t bufferSize, size_t x) {
+    // Ensure x doesn't exceed half of bufferSize
+//    if (2 * x > bufferSize) {
+//        // Adjust x if the buffer size is too small
+//        x = bufferSize / 2;
+//    }
+    for (size_t i = 0; i < x; i++) {
+        buffer[i] = "t";
+    }
+
+    // Fill the next x elements with 9
+    for (size_t i = x; i < 2 * x; i++) {
+        buffer[i] = 9;
+    }
+}
+
+void send_adc_buffer(int first_half_flag) {
+	if(first_half_flag == 0) {
+	  	CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals) / 2);
+	}
+	else {
+	  	CDC_Transmit_FS((uint8_t*)&adc_vals + DATASIZE, sizeof(adc_vals) / 2);
+	}
+}
 
 void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 {
@@ -135,6 +164,8 @@ void DSP(){
 	}
 	data_ready = 0;
 }
+int aux_retrigger_usb();
+
 
 /* USER CODE END 0 */
 
@@ -176,12 +207,12 @@ int main(void)
   MX_SPI3_Init();
   MX_TSC_Init();
   MX_USART2_UART_Init();
-  MX_USB_PCD_Init();
   MX_DAC2_Init();
   MX_SDADC1_Init();
   MX_TIM6_Init();
   MX_SDADC2_Init();
   MX_TIM13_Init();
+//  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   HAL_SDADC_CalibrationStart(&hsdadc1, SDADC_CALIBRATION_SEQ_1);
   HAL_SDADC_PollForCalibEvent(&hsdadc1, 10);
@@ -192,19 +223,33 @@ int main(void)
   HAL_SDADC_InjectedStart_IT(&hsdadc1);
   HAL_DAC_Start(&hdac2, DAC_CHANNEL_1);
 
+
+  aux_retrigger_usb();
+
+  fill_buffer(adc_vals, BUFFERSIZE, DATASIZE);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
 	  if(data_ready){
 		  DSP();
 	  }
+//	  send_adc_buffer(0);
+//	  CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals));
+
+//	  HAL_Delay(1000);
+//	  send_adc_buffer(1);
+//	  HAL_Delay(1000);
 //	  dac_val = test >> 4;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+
   }
   /* USER CODE END 3 */
 }
@@ -266,6 +311,35 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+int aux_retrigger_usb()
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+//    USBD_Stop(&hUsbDeviceFS);
+    HAL_Delay(100);
+//    USBD_DeInit(&hUsbDeviceFS);
+
+//    MX_USB_DEVICE_Init();
+
+//    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
+
+
+    // Delay to ensure the host detects the disconnect
+    HAL_Delay(500);
+    MX_USB_DEVICE_Init();
+
+//    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+
+    HAL_Delay(500);  // Small delay for stability
+
+    // Initialize USB Device
+//    MX_USB_DEVICE_Init();
+
+    // Start the USB device
+    USBD_Start(&hUsbDeviceFS);
+    return 1;
+}
 
 /* USER CODE END 4 */
 

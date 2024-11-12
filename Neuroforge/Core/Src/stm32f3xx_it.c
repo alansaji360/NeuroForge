@@ -55,6 +55,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_dac2_ch1;
 extern CEC_HandleTypeDef hcec;
 extern DMA_HandleTypeDef hdma_sdadc1;
@@ -270,6 +271,20 @@ void SDADC1_IRQHandler(void)
   /* USER CODE BEGIN SDADC1_IRQn 1 */
 
   /* USER CODE END SDADC1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USB low priority global interrupt.
+  */
+void USB_LP_IRQHandler(void)
+{
+  /* USER CODE BEGIN USB_LP_IRQn 0 */
+
+  /* USER CODE END USB_LP_IRQn 0 */
+  HAL_PCD_IRQHandler(&hpcd_USB_FS);
+  /* USER CODE BEGIN USB_LP_IRQn 1 */
+
+  /* USER CODE END USB_LP_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

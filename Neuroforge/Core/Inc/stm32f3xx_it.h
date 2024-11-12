@@ -60,6 +60,7 @@ void CEC_IRQHandler(void);
 void TIM13_IRQHandler(void);
 void DMA2_Channel3_IRQHandler(void);
 void SDADC1_IRQHandler(void);
+void USB_LP_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

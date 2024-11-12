@@ -143,10 +143,12 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 	  if(half_flag == 0){
 		  input_buffer_ptr = &adc_vals[DATASIZE];
 		  output_buffer_ptr = &dac_vals[0];
+		  send_adc_buffer(half_flag);
 	  }
 	  else{
 		  input_buffer_ptr = &adc_vals[0];
 		  output_buffer_ptr = &dac_vals[DATASIZE];
+		  send_adc_buffer(half_flag);
 	  }
 	  data_ready = 1;
 	  half_flag = !half_flag;

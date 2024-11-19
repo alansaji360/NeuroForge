@@ -23,19 +23,17 @@ class ButtonStyles():
     def animateGlow(self, widget, color):
         """Animate the widget with a glowing effect in a separate thread"""
         try:
-            while not self.stop_event.is_set():  # Check if the stop event is set
-                for alpha in range(100, 255, 5):  # Brighten
-                    if widget and widget.winfo_exists():  # Check if the widget still exists
+            while not self.stop_event.is_set():
+                for alpha in range(100, 255, 5):
+                    if widget and widget.winfo_exists():
                         hex_color = self.colorWithAlpha(color, alpha)
                         widget.config(fg=hex_color)
                     time.sleep(0.05)
 
-                    # Randomly change color
                     if random.random() < 0.4:
                         random_color = "#{:06x}".format(random.randint(0, 0xFFFFFF))
                         widget.config(fg=random_color)
 
-                    # Randomly flicker the text
                     if random.random() < 0.04:  
                         if random.random() < 0.5:
                             widget.config(text="OFFLINE")
@@ -56,8 +54,8 @@ class ButtonStyles():
 
                     time.sleep(0.05)
 
-                for alpha in range(255, 100, -10):  # Dim
-                    if widget and widget.winfo_exists():  # Check if the widget still exists
+                for alpha in range(255, 100, -10) :
+                    if widget and widget.winfo_exists():
                         hex_color = self.colorWithAlpha(color, alpha)
                         widget.config(fg=hex_color)
                     time.sleep(0.05)
@@ -72,8 +70,6 @@ class ButtonStyles():
     def stopGlowAnimation(self):
         """Stop the glow animation"""
         self.stop_event.set()
-        # if hasattr(self, 'animation_thread'):
-        #     self.animation_thread.join()
 
     def createButton(self, root, text, command):
         """Create a custom cyberpunk-style button"""
@@ -88,9 +84,8 @@ class ButtonStyles():
         )
         style.map(
             "Cyberpunk.TButton",
-            background=[("active", "#00FFFF")],  # Change on hover
+            background=[("active", "#00FFFF")]
         )
 
         button = ttk.Button(root, text=text, style="Cyberpunk.TButton", command=command)
         button.pack(expand=True)
-

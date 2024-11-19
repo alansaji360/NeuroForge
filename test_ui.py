@@ -18,6 +18,7 @@ from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import HORIZONTAL
 from tkinter import ttk
+from tkinter import Scale
 
 class App():
     def __init__(self):
@@ -37,6 +38,8 @@ class App():
 
         self.marker = 1
         self.buttons = ButtonStyles(self.root)
+
+        self.n_channels_slider = 1
 
         self.mainMenu()
 
@@ -68,12 +71,16 @@ class App():
         """Toggle the live plot window."""
         self.marker = 0
         self.buttons.stopGlowAnimation()
+        n_channel = self.n_channels_slider.get()
         time.sleep(0.5)
+        
         self.clearWindow()
+
         with open('waveform_data.csv', 'w') as file:
             file.truncate(0)
         print("waveform_data.csv: cleared")
-        self.plot = LivePlot(self.root, n_channels=1)
+        # print(self.n_channels_slider.get())
+        self.plot = LivePlot(self.root, n_channels=n_channel)
 
     def toggleBenchmark(self):
         """Toggle the benchmark window."""
@@ -90,10 +97,18 @@ class App():
 
         self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
 
-        self.buttons.createButton(self.root, "Live Plot",   self.toggleLivePlot)
-        self.buttons.createButton(self.root, "Benchmark",   self.toggleBenchmark)
-        self.buttons.createButton(self.root, "Exit",        exit)
+        self.buttons.createButton(self.root, "LIVE PLOT",   self.toggleLivePlot)
+        self.buttons.createButton(self.root, "BENCHMARK",   self.toggleBenchmark)
+        self.buttons.createButton(self.root, "EXIT",        exit)
 
+        slider_label = tk.Label(self.root, text="SELECT NUMBER OF CHANNELS", bg=self.BG_COLOR, fg="white")
+        slider_label.pack(pady=5)
+        
+        self.n_channels_slider = Scale(self.root, from_=1, to=4, orient=HORIZONTAL, bg=self.BG_COLOR, fg="white")
+        self.n_channels_slider.set(1)  # Set default value
+        self.n_channels_slider.pack(pady=5)
+        # print(self.n_channels_slider.get())
+        
         self.root.mainloop()
 
 class LivePlot():
@@ -101,7 +116,7 @@ class LivePlot():
         """Initialize Live_Plot object"""
         self.root = root
         
-        self.COM_PORT = 'COM5'                          # Change to your COM port
+        self.COM_PORT = 'COM3'                          # Change to your COM port
         self.BAUD_RATE = 115200                         # Change to the appropriate baud rate
         self.NUM_SAMPLES = 64                           # Number of bytes to read (32 bytes = 16 samples)
         self.SAMPLE_RATE = 18000                        # Define the sampling rate (Hz)
@@ -124,14 +139,19 @@ class LivePlot():
         self.beta_buffer = np.zeros(self.BUFFER_SIZE)
         self.gamma_buffer = np.zeros(self.BUFFER_SIZE)
 
-        self.buffers = {
-            ch: {
-                'alpha': np.zeros(self.BUFFER_SIZE),
-                'beta': np.zeros(self.BUFFER_SIZE),
-                'gamma': np.zeros(self.BUFFER_SIZE)
-            }
-            for ch in range(self.NUM_CHANNELS)
-        }
+        # self.buffers = {
+        #     ch: {
+        #         'alpha': np.zeros(self.BUFFER_SIZE),
+        #         'beta': np.zeros(self.BUFFER_SIZE),
+        #         'gamma': np.zeros(self.BUFFER_SIZE)
+        #     }
+        #     for ch in range(1 ,self.NUM_CHANNELS)
+        # }
+
+        self.buffers = {}
+
+        for ch in range(self.NUM_CHANNELS):
+            self.buffers[ch] = {'alpha': [], 'beta': [], 'gamma': []} 
 
         self.enable = 1
 
@@ -162,6 +182,8 @@ class LivePlot():
             }
             for ch in range(self.NUM_CHANNELS)
         }
+
+        
 
         self.info = mne.create_info(ch_names=['Channel 1'], sfreq=self.SAMPLE_RATE, ch_types=['eeg'])
         self.raw = mne.io.RawArray(self.data_buffer, self.info)
@@ -196,38 +218,41 @@ class LivePlot():
                     data = struct.unpack('<18H', frame) 
                     #data = struct.unpack('<24H', frame)
 
-                    header = data[0]  # First uint16 for header
-                    wave_type = data[1]  # Second uint16 for wave type
-                    #channel = data[2]  # Third uint16 for channel
-                    data = data[2:]  # Remaining 14 uint16 for sample values
+                    header = data[0]        # 1st uint16 for header
+                    id = data[1]             # 2nd uint16 0-12 channel/wave type 
+                    data = data[2:]         # Remaining 16 uint16 for sample values
                     
+                    channel = (id // 3)
+                    wave_type = id % 3
                     # Print debug information
-                    # print(f"Header: {header} Wave Type: {wave_type} Channel: {channel} Data: {data}")
+                    # print(f"Header: {id} Wave Type: {wave_type} Channel: {channel} Data: {data}")
 
-                    # if header == 0 and channel_id in self.buffers:
-                        # wave_name = self.get_wave_name(wave_type)
+                    if header == 0 and channel in self.buffers:
+                        wave_name = self.get_wave_name(wave_type)
 
-                        # if wave_name:
-                        #     buffer = self.buffers[channel_id][wave_name]
-                        #     idx = self.sample_index[channel_id]
+                        if wave_name:
+                            buffer = self.buffers[channel][wave_name]
+                            # idx = self.sample_index[channel]
 
-                        #     # Update buffer with new samples
-                        #     buffer[idx:idx + 14] = samples
-                        #     self.sample_index[channel_id] = (idx + 14) % self.BUFFER_SIZE
+                            buffer[:-16] = buffer[16:]
+                            buffer[-16:] = data
+                            # buffer[idx:idx + 14] = samples
+                            # self.sample_index[channel_id] = (idx + 14) % self.BUFFER_SIZE
+                    # print(f"Buffers: {self.buffers[0]['alpha'][:10]}")
                         
-                    if header == 0:
-                        # Update the buffers based on wave type
-                        if wave_type == 1:  # Alpha wave
-                            self.alpha_buffer[:-16] = self.alpha_buffer[16:]
-                            self.alpha_buffer[-16:] = data
+                    # if header == 0:
+                    #     # Update the buffers based on wave type
+                    #     if wave_type == 1:  # Alpha wave
+                    #         self.alpha_buffer[:-16] = self.alpha_buffer[16:]
+                    #         self.alpha_buffer[-16:] = data
 
-                        elif wave_type == 2:  # Beta wave
-                            self.beta_buffer[:-16] = self.beta_buffer[16:]
-                            self.beta_buffer[-16:] = data
+                    #     elif wave_type == 2:  # Beta wave
+                    #         self.beta_buffer[:-16] = self.beta_buffer[16:]
+                    #         self.beta_buffer[-16:] = data
                             
-                        elif wave_type == 3:  # Gamma wave
-                            self.gamma_buffer[:-16] = self.gamma_buffer[16:]
-                            self.gamma_buffer[-16:] = data
+                    #     elif wave_type == 3:  # Gamma wave
+                    #         self.gamma_buffer[:-16] = self.gamma_buffer[16:]
+                    #         self.gamma_buffer[-16:] = data
 
                     # print("Current Buffers:")
                     # print(f"Alpha: {self.alpha_buffer[:10]}")  # Print first 10 values for quick check
@@ -236,7 +261,7 @@ class LivePlot():
 
     def get_wave_name(self, wave_type):
         """Map wave type to wave name."""
-        return {1: 'alpha', 2: 'beta', 3: 'gamma'}.get(wave_type)
+        return {0: 'alpha', 1: 'beta', 2: 'gamma'}.get(wave_type)
     
     def saveDataToFile(self):
         """Save all data to a single CSV file with clear separation."""
@@ -285,41 +310,42 @@ class LivePlot():
         #     self.canvas.draw()
         # self.root.after(1, self.updatePlot)
 
-        self.ax.clear()
+        # self.ax.clear()
 
-        # Plot each wave type
-        self.ax.plot(self.alpha_buffer, color='b', label="Alpha")
-        self.ax.plot(self.beta_buffer, color='g', label="Beta")
-        self.ax.plot(self.gamma_buffer, color='r', label="Gamma")
+        # # Plot each wave type
+        # self.ax.plot(self.alpha_buffer, color='b', label="Alpha")
+        # self.ax.plot(self.beta_buffer, color='g', label="Beta")
+        # self.ax.plot(self.gamma_buffer, color='r', label="Gamma")
 
-        self.ax.set_title("Alpha, Beta, and Gamma Waves")
-        self.ax.set_xlabel('Samples')
-        self.ax.set_ylabel('Amplitude')
-        self.ax.set_ylim(self.Y_MIN, self.Y_MAX)
-        self.ax.legend()
-
-        self.canvas.draw()
-        self.root.after(1, self.updatePlot)
-
-        # self.ax.clear()  # Clear the plot
-
-        # for ch in range(self.n_channels):
-        #     alpha_data = self.buffers[ch]['alpha']
-        #     beta_data = self.buffers[ch]['beta']
-        #     gamma_data = self.buffers[ch]['gamma']
-
-        #     # Plot each wave type with a different color
-        #     self.ax.plot(alpha_data, label=f'Alpha (Ch {ch})', color='blue')
-        #     self.ax.plot(beta_data, label=f'Beta (Ch {ch})', color='green')
-        #     self.ax.plot(gamma_data, label=f'Gamma (Ch {ch})', color='red')
-
-        # self.ax.set_ylim(-1000, 4500)  # Adjust based on signal range
-        # self.ax.set_title("Real-Time EEG Data (Multi-Channel)")
-        # self.ax.set_xlabel("Samples")
-        # self.ax.set_ylabel("Amplitude")
+        # self.ax.set_title("Alpha, Beta, and Gamma Waves")
+        # self.ax.set_xlabel('Samples')
+        # self.ax.set_ylabel('Amplitude')
+        # self.ax.set_ylim(self.Y_MIN, self.Y_MAX)
         # self.ax.legend()
-        # self.canvas.draw()
 
+        # self.canvas.draw()
+        # self.root.after(1, self.updatePlot)
+
+        self.ax.clear()  # Clear the plot
+
+        for ch in range(self.NUM_CHANNELS):
+            alpha_data = self.buffers[ch]['alpha']
+            beta_data = self.buffers[ch]['beta']
+            gamma_data = self.buffers[ch]['gamma']
+
+            # Plot each wave type with a different color
+            self.ax.plot(alpha_data, label=f'Alpha (Ch {ch})', color='blue')
+            self.ax.plot(beta_data, label=f'Beta (Ch {ch})', color='green')
+            self.ax.plot(gamma_data, label=f'Gamma (Ch {ch})', color='red')
+
+        self.ax.set_ylim(-1000, 4500)  # Adjust based on signal range
+        self.ax.set_title("Real-Time EEG Data (Multi-Channel)")
+        self.ax.set_xlabel("Samples")
+        self.ax.set_ylabel("Amplitude")
+        self.ax.legend()
+        self.canvas.draw()
+
+        self.root.after(1, self.updatePlot)
 
     def __del__(self):
         """Cleanup resources and stop threads"""

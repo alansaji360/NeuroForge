@@ -57,10 +57,10 @@
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_dac2_ch1;
-extern CEC_HandleTypeDef hcec;
-extern DMA_HandleTypeDef hdma_sdadc1;
 extern SDADC_HandleTypeDef hsdadc1;
+extern SDADC_HandleTypeDef hsdadc2;
 extern TIM_HandleTypeDef htim13;
+extern TIM_HandleTypeDef htim17;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -89,11 +89,12 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }
@@ -204,6 +205,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles EXTI line0 interrupt.
+  */
+void EXTI0_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI0_IRQn 0 */
+
+  /* USER CODE END EXTI0_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  /* USER CODE BEGIN EXTI0_IRQn 1 */
+
+  /* USER CODE END EXTI0_IRQn 1 */
+}
+
+/**
   * @brief This function handles DMA1 channel5 global interrupt.
   */
 void DMA1_Channel5_IRQHandler(void)
@@ -218,17 +233,17 @@ void DMA1_Channel5_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles HDMI-CEC global interrupt / HDMI-CEC wake-up interrupt through EXT line 27.
+  * @brief This function handles TIM17 global interrupt.
   */
-void CEC_IRQHandler(void)
+void TIM17_IRQHandler(void)
 {
-  /* USER CODE BEGIN CEC_IRQn 0 */
+  /* USER CODE BEGIN TIM17_IRQn 0 */
 
-  /* USER CODE END CEC_IRQn 0 */
-  HAL_CEC_IRQHandler(&hcec);
-  /* USER CODE BEGIN CEC_IRQn 1 */
+  /* USER CODE END TIM17_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim17);
+  /* USER CODE BEGIN TIM17_IRQn 1 */
 
-  /* USER CODE END CEC_IRQn 1 */
+  /* USER CODE END TIM17_IRQn 1 */
 }
 
 /**
@@ -246,20 +261,6 @@ void TIM13_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles DMA2 channel3 global interrupt.
-  */
-void DMA2_Channel3_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA2_Channel3_IRQn 0 */
-
-  /* USER CODE END DMA2_Channel3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_sdadc1);
-  /* USER CODE BEGIN DMA2_Channel3_IRQn 1 */
-
-  /* USER CODE END DMA2_Channel3_IRQn 1 */
-}
-
-/**
   * @brief This function handles SDADC1 global interrupt.
   */
 void SDADC1_IRQHandler(void)
@@ -271,6 +272,20 @@ void SDADC1_IRQHandler(void)
   /* USER CODE BEGIN SDADC1_IRQn 1 */
 
   /* USER CODE END SDADC1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles SDADC2 global interrupt.
+  */
+void SDADC2_IRQHandler(void)
+{
+  /* USER CODE BEGIN SDADC2_IRQn 0 */
+
+  /* USER CODE END SDADC2_IRQn 0 */
+  HAL_SDADC_IRQHandler(&hsdadc2);
+  /* USER CODE BEGIN SDADC2_IRQn 1 */
+
+  /* USER CODE END SDADC2_IRQn 1 */
 }
 
 /**

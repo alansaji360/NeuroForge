@@ -26,7 +26,6 @@
 
 SDADC_HandleTypeDef hsdadc1;
 SDADC_HandleTypeDef hsdadc2;
-DMA_HandleTypeDef hdma_sdadc1;
 
 /* SDADC1 init function */
 void MX_SDADC1_Init(void)
@@ -63,7 +62,7 @@ void MX_SDADC1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_SDADC_SelectInjectedExtTrigger(&hsdadc1, SDADC_EXT_TRIG_EXTI11, SDADC_EXT_TRIG_RISING_EDGE) != HAL_OK)
+  if (HAL_SDADC_SelectInjectedExtTrigger(&hsdadc1, SDADC_EXT_TRIG_TIM13_CC1, SDADC_EXT_TRIG_RISING_EDGE) != HAL_OK)
   {
     Error_Handler();
   }
@@ -71,7 +70,7 @@ void MX_SDADC1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_SDADC_InjectedConfigChannel(&hsdadc1, SDADC_CHANNEL_2, SDADC_CONTINUOUS_CONV_ON) != HAL_OK)
+  if (HAL_SDADC_InjectedConfigChannel(&hsdadc1, SDADC_CHANNEL_8|SDADC_CHANNEL_2, SDADC_CONTINUOUS_CONV_ON) != HAL_OK)
   {
     Error_Handler();
   }
@@ -93,6 +92,13 @@ void MX_SDADC1_Init(void)
   {
     Error_Handler();
   }
+
+  /** Configure the Injected Channel
+  */
+  if (HAL_SDADC_AssociateChannelConfig(&hsdadc1, SDADC_CHANNEL_8, SDADC_CONF_INDEX_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN SDADC1_Init 2 */
 
   /* USER CODE END SDADC1_Init 2 */
@@ -106,6 +112,8 @@ void MX_SDADC2_Init(void)
 
   /* USER CODE END SDADC2_Init 0 */
 
+  SDADC_ConfParamTypeDef ConfParamStruct = {0};
+
   /* USER CODE BEGIN SDADC2_Init 1 */
 
   /* USER CODE END SDADC2_Init 1 */
@@ -118,7 +126,53 @@ void MX_SDADC2_Init(void)
   hsdadc2.Init.FastConversionMode = SDADC_FAST_CONV_DISABLE;
   hsdadc2.Init.SlowClockMode = SDADC_SLOW_CLOCK_DISABLE;
   hsdadc2.Init.ReferenceVoltage = SDADC_VREF_EXT;
+  hsdadc2.InjectedTrigger = SDADC_EXTERNAL_TRIGGER;
+  hsdadc2.ExtTriggerEdge = SDADC_EXT_TRIG_RISING_EDGE;
   if (HAL_SDADC_Init(&hsdadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure the Injected Mode
+  */
+  if (HAL_SDADC_SelectInjectedDelay(&hsdadc2, SDADC_INJECTED_DELAY_NONE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_SDADC_SelectInjectedExtTrigger(&hsdadc2, SDADC_EXT_TRIG_TIM17_CC1, SDADC_EXT_TRIG_RISING_EDGE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_SDADC_SelectInjectedTrigger(&hsdadc2, SDADC_EXTERNAL_TRIGGER) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_SDADC_InjectedConfigChannel(&hsdadc2, SDADC_CHANNEL_2|SDADC_CHANNEL_0, SDADC_CONTINUOUS_CONV_OFF) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Set parameters for SDADC configuration 0 Register
+  */
+  ConfParamStruct.InputMode = SDADC_INPUT_MODE_SE_OFFSET;
+  ConfParamStruct.Gain = SDADC_GAIN_1_2;
+  ConfParamStruct.CommonMode = SDADC_COMMON_MODE_VSSA;
+  ConfParamStruct.Offset = 0;
+  if (HAL_SDADC_PrepareChannelConfig(&hsdadc2, SDADC_CONF_INDEX_0, &ConfParamStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure the Injected Channel
+  */
+  if (HAL_SDADC_AssociateChannelConfig(&hsdadc2, SDADC_CHANNEL_2, SDADC_CONF_INDEX_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure the Injected Channel
+  */
+  if (HAL_SDADC_AssociateChannelConfig(&hsdadc2, SDADC_CHANNEL_0, SDADC_CONF_INDEX_0) != HAL_OK)
   {
     Error_Handler();
   }
@@ -143,31 +197,12 @@ void HAL_SDADC_MspInit(SDADC_HandleTypeDef* sdadcHandle)
     __HAL_RCC_GPIOE_CLK_ENABLE();
     /**SDADC1 GPIO Configuration
     PE8     ------> SDADC1_AIN8P
-    PE9     ------> SDADC1_AIN8M
     PE10     ------> SDADC1_AIN2P
-    PE12     ------> SDADC1_AIN0P
     */
-    GPIO_InitStruct.Pin = PRESSURE_P_Pin|PRESSURE_N_Pin|GPIO_PIN_10|GPIO_PIN_12;
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_10;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-    /* SDADC1 DMA Init */
-    /* SDADC1 Init */
-    hdma_sdadc1.Instance = DMA2_Channel3;
-    hdma_sdadc1.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_sdadc1.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_sdadc1.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_sdadc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_sdadc1.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-    hdma_sdadc1.Init.Mode = DMA_CIRCULAR;
-    hdma_sdadc1.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-    if (HAL_DMA_Init(&hdma_sdadc1) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-    __HAL_LINKDMA(sdadcHandle,hdma,hdma_sdadc1);
 
     /* SDADC1 interrupt Init */
     HAL_NVIC_SetPriority(SDADC1_IRQn, 0, 0);
@@ -186,14 +221,17 @@ void HAL_SDADC_MspInit(SDADC_HandleTypeDef* sdadcHandle)
 
     __HAL_RCC_GPIOE_CLK_ENABLE();
     /**SDADC2 GPIO Configuration
-    PE14     ------> SDADC2_AIN1P
+    PE13     ------> SDADC2_AIN2P
     PE15     ------> SDADC2_AIN0P
     */
-    GPIO_InitStruct.Pin = PRESSURE_TEMP_Pin|GPIO_PIN_15;
+    GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
+    /* SDADC2 interrupt Init */
+    HAL_NVIC_SetPriority(SDADC2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(SDADC2_IRQn);
   /* USER CODE BEGIN SDADC2_MspInit 1 */
 
   /* USER CODE END SDADC2_MspInit 1 */
@@ -213,14 +251,9 @@ void HAL_SDADC_MspDeInit(SDADC_HandleTypeDef* sdadcHandle)
 
     /**SDADC1 GPIO Configuration
     PE8     ------> SDADC1_AIN8P
-    PE9     ------> SDADC1_AIN8M
     PE10     ------> SDADC1_AIN2P
-    PE12     ------> SDADC1_AIN0P
     */
-    HAL_GPIO_DeInit(GPIOE, PRESSURE_P_Pin|PRESSURE_N_Pin|GPIO_PIN_10|GPIO_PIN_12);
-
-    /* SDADC1 DMA DeInit */
-    HAL_DMA_DeInit(sdadcHandle->hdma);
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_8|GPIO_PIN_10);
 
     /* SDADC1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(SDADC1_IRQn);
@@ -237,11 +270,13 @@ void HAL_SDADC_MspDeInit(SDADC_HandleTypeDef* sdadcHandle)
     __HAL_RCC_SDADC2_CLK_DISABLE();
 
     /**SDADC2 GPIO Configuration
-    PE14     ------> SDADC2_AIN1P
+    PE13     ------> SDADC2_AIN2P
     PE15     ------> SDADC2_AIN0P
     */
-    HAL_GPIO_DeInit(GPIOE, PRESSURE_TEMP_Pin|GPIO_PIN_15);
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_13|GPIO_PIN_15);
 
+    /* SDADC2 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(SDADC2_IRQn);
   /* USER CODE BEGIN SDADC2_MspDeInit 1 */
 
   /* USER CODE END SDADC2_MspDeInit 1 */

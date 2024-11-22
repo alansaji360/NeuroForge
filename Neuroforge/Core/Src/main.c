@@ -18,17 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "comp.h"
 #include "dac.h"
 #include "dma.h"
-#include "hdmi_cec.h"
-#include "i2c.h"
-#include "i2s.h"
 #include "sdadc.h"
-#include "spi.h"
 #include "tim.h"
-#include "tsc.h"
-#include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
 
@@ -37,6 +30,8 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "usbd_core.h"
+
+#include "IIR.h"
 
 /* USER CODE END Includes */
 
@@ -62,25 +57,42 @@
 #define DATASIZE 128
 // full buffer size
 #define BUFFERSIZE DATASIZE * 2
+#define CHANNELWIDTH 4
 
-uint16_t adc_vals[BUFFERSIZE];
-uint16_t dac_vals[BUFFERSIZE];
+uint16_t adc_vals[CHANNELWIDTH][BUFFERSIZE];
+uint16_t dac_vals[CHANNELWIDTH][BUFFERSIZE];
 
-uint32_t adc_val;
-uint32_t dac_val;
-uint16_t test;
-uint8_t ctr = 0;
-uint8_t start_pt_i = 0;
-uint8_t start_pt_o = DATASIZE;
-uint8_t half_flag = 0;
+uint16_t conv_val;
 
-uint8_t data_ready;
+uint8_t ch;
+uint8_t ch_out = 0;
+
+uint8_t half_full_usb[CHANNELWIDTH] = {0};
+uint8_t full_usb[CHANNELWIDTH] = {0};
+
+uint8_t ctr[CHANNELWIDTH] = {0};
+uint8_t conv_ctr[CHANNELWIDTH] = {0};
+
+uint8_t half_flag[CHANNELWIDTH] = {0};
+
+uint8_t data_ready[CHANNELWIDTH] = {0};
 
 __IO uint32_t InjChannel = 0;
 
-static volatile uint16_t* input_buffer_ptr = &adc_vals[0];
-static volatile uint16_t* output_buffer_ptr;
-extern USBD_HandleTypeDef hUsbDeviceFS;
+static volatile uint16_t* input_buffer_ptr[CHANNELWIDTH] = {&adc_vals[0][0], &adc_vals[1][0], &adc_vals[2][0], &adc_vals[3][0]};
+static volatile uint16_t* output_buffer_ptr[CHANNELWIDTH] = {&dac_vals[0][0], &dac_vals[1][0], &dac_vals[2][0], &dac_vals[3][0]};
+
+IIR1 high_8_1[CHANNELWIDTH], high_8_2[CHANNELWIDTH], high_8_3[CHANNELWIDTH];
+
+IIR1 low_12_1[CHANNELWIDTH], low_12_2[CHANNELWIDTH], low_12_3[CHANNELWIDTH];
+
+IIR2 high_12_1[CHANNELWIDTH], high_12_2[CHANNELWIDTH];
+
+IIR2 low_30_1[CHANNELWIDTH], low_30_2[CHANNELWIDTH];
+
+IIR2 high_30_1[CHANNELWIDTH], high_30_2[CHANNELWIDTH];
+
+IIR2 low_100_1[CHANNELWIDTH], low_100_2[CHANNELWIDTH];
 
 /* USER CODE END PV */
 
@@ -92,82 +104,131 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-//void HAL_SDADC_InjectedConvHalfCpltCallback(SDADC_HandleTypeDef* hsdadc)
-//{
-//	input_buffer_ptr = &adc_vals[DATASIZE];
-//	output_buffer_ptr = &dac_vals[0];
-//
-//	data_ready = 1;
-//}
 
-//void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef* hsdadc)
-//{
-//	input_buffer_ptr = &adc_vals[0];
-//	output_buffer_ptr = &dac_vals[DATASIZE];
-//
-//	data_ready = 1;
-//}
-void fill_buffer(uint16_t *buffer, size_t bufferSize, size_t x) {
-    // Ensure x doesn't exceed half of bufferSize
-//    if (2 * x > bufferSize) {
-//        // Adjust x if the buffer size is too small
-//        x = bufferSize / 2;
-//    }
-    for (size_t i = 0; i < x; i++) {
-        buffer[i] = "t";
-    }
+void DSP(uint8_t chl){
 
-    // Fill the next x elements with 9
-    for (size_t i = x; i < 2 * x; i++) {
-        buffer[i] = 9;
-    }
+	float in8high;
+	float out8high;
+
+//	float in12low;
+	float out12low;
+
+	float in12high;
+	float out12high;
+
+//	float in30low;
+	float out30low;
+
+	float in30high;
+	float out30high;
+
+//	float in100low;
+	float out100low;
+
+	for(int i = 0; i < DATASIZE; i++){
+//		in8high = (float) (input_buffer_ptr[chl][i]);
+////		in12low = (float) (input_buffer_ptr[i]);
+//		in12high = (float) (input_buffer_ptr[chl][i]);
+////		in30low = (float) (input_buffer_ptr[i]);
+//		in30high = (float) (input_buffer_ptr[chl][i]);
+////		in100low = (float) (input_buffer_ptr[i]);
+//
+//		out8high = IIR1_Update(&high_8_1[chl], in8high);
+//		out8high = IIR1_Update(&high_8_2[chl], out8high);
+//		out8high = IIR1_Update(&high_8_3[chl], out8high) + 1500;
+//
+//		out12low = IIR1_Update(&low_12_1[chl], out8high);
+//		out12low = IIR1_Update(&low_12_2[chl], out12low);
+//		out12low = IIR1_Update(&low_12_3[chl], out12low);
+//		out12low *= 1.5;
+//
+//		out12high = IIR2_Update(&high_12_1[chl], in12high);
+//		out12high = IIR2_Update(&high_12_2[chl], out12high) + 1500;
+//		out12high *= 1.1;
+//
+//		out30low = IIR2_Update(&low_30_1[chl], out12high);
+//		out30low = IIR2_Update(&low_30_2[chl], out30low) + 14000;
+//
+//		out30high = IIR2_Update(&high_30_1[chl], in30high);
+//		out30high = IIR2_Update(&high_30_2[chl], out30high);
+//
+//		out100low = IIR2_Update(&low_100_1[chl], out30high);
+//		out100low = IIR2_Update(&low_100_2[chl], out100low) * 1;
+//
+//		output_buffer_ptr[chl][i] = ((uint16_t) (out30low)) >> 4;
+		output_buffer_ptr[chl][i] = input_buffer_ptr[chl][i] >> 4;
+
+//		alpha_buffer_ptr[i] = (uint32_t) (out12low);
+//		beta_buffer_ptr[i] = (uint32_t) (out30low);
+//		gamma_buffer_ptr[i] = (uint32_t) (out100low);
+	}
+	data_ready[chl] = 0;
 }
 
-void send_adc_buffer(int first_half_flag) {
-	if(first_half_flag == 0) {
-	  	CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals) / 2);
+void DAC_Set(uint8_t chl){
+	if(ch_out == 0 && chl == 0){
+		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[0][conv_ctr[0]]);
 	}
-	else {
-	  	CDC_Transmit_FS((uint8_t*)&adc_vals + DATASIZE, sizeof(adc_vals) / 2);
+	else if(ch_out == 1 && chl == 1){
+		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[1][conv_ctr[1]]);
+	}
+	else if(ch_out == 2 && chl == 2){
+		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[2][conv_ctr[2]]);
+	}
+	else if(ch_out == 3 && chl == 3){
+		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[3][conv_ctr[3]]);
 	}
 }
 
 void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 {
-  /* Get conversion value */
-  input_buffer_ptr[ctr] = HAL_SDADC_InjectedGetValue(hsdadc, (uint32_t *) &InjChannel);
-  output_buffer_ptr[ctr] = input_buffer_ptr[ctr] >> 4;
-  HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, output_buffer_ptr[ctr]);
-
-  if(ctr == DATASIZE - 1){
-	  if(half_flag == 0){
-		  input_buffer_ptr = &adc_vals[DATASIZE];
-		  output_buffer_ptr = &dac_vals[0];
-		  send_adc_buffer(half_flag);
+  conv_val = HAL_SDADC_InjectedGetValue(hsdadc, (uint32_t *) &InjChannel);
+  if (hsdadc->Instance == SDADC1){
+	  // SDADC1 completed the injected conversion
+	  if(InjChannel == 2){
+		  ch = 0;
 	  }
-	  else{
-		  input_buffer_ptr = &adc_vals[0];
-		  output_buffer_ptr = &dac_vals[DATASIZE];
-		  send_adc_buffer(half_flag);
+	  else if(InjChannel == 8){
+		  ch = 1;
 	  }
-	  data_ready = 1;
-	  half_flag = !half_flag;
   }
-  ctr = (ctr == DATASIZE - 1) ? 0 : ctr + 1;
+  else if (hsdadc->Instance == SDADC2){
+	  // SDADC2 completed the injected conversion
+	  if(InjChannel == 2){
+		  ch = 2;
+	  }
+	  else if(InjChannel == 0){
+		  ch = 3;
+	  }
+  }
 
+  adc_vals[ch][conv_ctr[ch]] = conv_val;
+  DAC_Set(ch);
+
+  if((ctr[ch] == DATASIZE - 1)){
+	  if(half_flag[ch] == 0){ // first half filled
+		  input_buffer_ptr[ch] = &adc_vals[ch][0];
+		  output_buffer_ptr[ch] = &dac_vals[ch][0];
+		  half_full_usb[ch] = 1;
+		  half_flag[ch] = 1;
+	  }
+	  else if(half_flag[ch] == 1){ //second half filled
+		  input_buffer_ptr[ch] = &adc_vals[ch][DATASIZE];
+		  output_buffer_ptr[ch] = &dac_vals[ch][DATASIZE];
+		  full_usb[ch] = 1;
+		  half_flag[ch] = 0;
+	  }
+	  data_ready[ch] = 1;
+  }
+
+  ctr[ch] = (ctr[ch] == DATASIZE - 1) ? 0 : ctr[ch] + 1;
+  conv_ctr[ch] = (conv_ctr[ch] == BUFFERSIZE - 1) ? 0 : conv_ctr[ch] + 1;
 }
 
-void DSP(){
-	for(int i = 0; i < DATASIZE; i++){
-//		output_buffer_ptr[i] = input_buffer_ptr[i] >> 4;
-//		dac_vals[i] = adc_vals[i];
-//		HAL_Delay(1);
-//		output_buffer_ptr[i] = ((input_buffer_ptr[i] & 0xfdfffff) >> 4) - 2097152;
-	}
-	data_ready = 0;
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  ch_out = (ch_out == 3) ? 0 : ch_out + 1;
 }
-int aux_retrigger_usb();
-
 
 /* USER CODE END 0 */
 
@@ -201,34 +262,57 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_COMP2_Init();
-  MX_HDMI_CEC_Init();
-  MX_I2C1_Init();
-  MX_I2C2_SMBUS_Init();
-  MX_I2S1_Init();
-  MX_SPI3_Init();
-  MX_TSC_Init();
-  MX_USART2_UART_Init();
   MX_DAC2_Init();
   MX_SDADC1_Init();
   MX_TIM6_Init();
-  MX_SDADC2_Init();
   MX_TIM13_Init();
-//  MX_USB_DEVICE_Init();
+  MX_USB_DEVICE_Init();
+  MX_TIM17_Init();
+  MX_SDADC2_Init();
   /* USER CODE BEGIN 2 */
+
+  // INIT FILTERS
+  for(int i = 0; i < CHANNELWIDTH; i++){
+	// 8 Hz High
+	IIR1_Init(&high_8_1[i], -0.9986, 0.9993, -0.9993);
+	IIR1_Init(&high_8_2[i], -0.9986, 0.9993, -0.9993);
+	IIR1_Init(&high_8_3[i], -0.9986, 0.9993, -0.9993);
+
+	// 12 Hz low
+	IIR1_Init(&low_12_1[i], -0.9925, 0.0038, 0.0038);
+	IIR1_Init(&low_12_2[i], -0.9864, 0.0068, 0.0068);
+	IIR1_Init(&low_12_3[i], -0.9898, 0.0051, 0.0051);
+
+	// 12 Hz High
+	IIR2_Init(&high_12_1[i], -1.9961, 0.9961, 0.9422, -1.8844, 0.9422);
+	IIR2_Init(&high_12_2[i], -1.9990, 0.9990, 0.9221, -1.8442, 0.9221);
+
+	// 30 Hz low
+	IIR2_Init(&low_30_1[i], -1.9917, 0.9919, 0.5601, -1.1200, 0.5601);
+	IIR2_Init(&low_30_2[i], -1.9879, 0.9881, 0.3144, -0.6286, 0.3144);
+
+	// 30 Hz High
+	IIR2_Init(&high_30_1[i], -1.9901, 0.9902, 0.9394, -1.8788, 0.9394);
+	IIR2_Init(&high_30_2[i], -1.9863, 0.9865, 0.9163, -1.8326, 0.9163);
+
+	// 100 Hz Low
+	IIR2_Init(&low_100_1[i], -1.9626, 0.9645, 0.4390, -0.8762, 0.4390);
+	IIR2_Init(&low_100_2[i], -1.9804, 0.9824, 0.9145, -1.8270, 0.9145);
+  }
+
   HAL_SDADC_CalibrationStart(&hsdadc1, SDADC_CALIBRATION_SEQ_1);
   HAL_SDADC_PollForCalibEvent(&hsdadc1, 10);
+
+  HAL_SDADC_CalibrationStart(&hsdadc2, SDADC_CALIBRATION_SEQ_1);
+  HAL_SDADC_PollForCalibEvent(&hsdadc2, 10);
+
   HAL_TIM_Base_Start(&htim6);
   HAL_TIM_PWM_Start(&htim13, TIM_CHANNEL_1);
-//  HAL_SDADC_InjectedStart_DMA(&hsdadc1, (uint32_t *) adc_vals, BUFFERSIZE);
-//  HAL_DAC_Start_DMA(&hdac2, DAC_CHANNEL_1, (uint32_t *) dac_vals, BUFFERSIZE, DAC_ALIGN_12B_R);
+  HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
   HAL_SDADC_InjectedStart_IT(&hsdadc1);
+  HAL_SDADC_InjectedStart_IT(&hsdadc2);
   HAL_DAC_Start(&hdac2, DAC_CHANNEL_1);
-
-
-  aux_retrigger_usb();
-
-  fill_buffer(adc_vals, BUFFERSIZE, DATASIZE);
+  ch_out = 0;
 
   /* USER CODE END 2 */
 
@@ -236,17 +320,18 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-	  if(data_ready){
-		  DSP();
+	  if(data_ready[0]){
+		  DSP(0);
 	  }
-//	  send_adc_buffer(0);
-//	  CDC_Transmit_FS((uint8_t*)&adc_vals, sizeof(adc_vals));
-
-//	  HAL_Delay(1000);
-//	  send_adc_buffer(1);
-//	  HAL_Delay(1000);
-//	  dac_val = test >> 4;
+	  if(data_ready[1]){
+		  DSP(1);
+	  }
+	  if(data_ready[2]){
+		  DSP(2);
+	  }
+	  if(data_ready[3]){
+		  DSP(3);
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -269,11 +354,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
@@ -295,14 +379,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART2
-                              |RCC_PERIPHCLK_CEC|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_I2C2|RCC_PERIPHCLK_SDADC;
-  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
-  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
-  PeriphClkInit.I2c2ClockSelection = RCC_I2C2CLKSOURCE_HSI;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_SDADC;
   PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
-  PeriphClkInit.CecClockSelection = RCC_CECCLKSOURCE_HSI;
   PeriphClkInit.SdadcClockSelection = RCC_SDADCSYSCLK_DIV12;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
@@ -313,35 +391,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-int aux_retrigger_usb()
-{
-    GPIO_InitTypeDef GPIO_InitStructure;
-//    USBD_Stop(&hUsbDeviceFS);
-    HAL_Delay(100);
-//    USBD_DeInit(&hUsbDeviceFS);
-
-//    MX_USB_DEVICE_Init();
-
-//    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
-
-
-    // Delay to ensure the host detects the disconnect
-    HAL_Delay(500);
-    MX_USB_DEVICE_Init();
-
-//    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    HAL_Delay(500);  // Small delay for stability
-
-    // Initialize USB Device
-//    MX_USB_DEVICE_Init();
-
-    // Start the USB device
-    USBD_Start(&hUsbDeviceFS);
-    return 1;
-}
 
 /* USER CODE END 4 */
 

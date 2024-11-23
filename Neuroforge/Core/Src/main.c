@@ -59,12 +59,21 @@
 #define BUFFERSIZE DATASIZE * 2
 #define CHANNELWIDTH 4
 
+//USB CONSTANTS
+#define DATA_POINTS_PER_PACKET 64
+#define NUM_BUFFERS_TO_PACK 12
+#define LIVE_READ_PACKET_SIZE ((DATA_POINTS_PER_PACKET + 2) * NUM_BUFFERS_TO_PACK)
+
+uint16_t live_read_packet[LIVE_READ_PACKET_SIZE];
+
 uint16_t adc_vals[CHANNELWIDTH][BUFFERSIZE];
-uint16_t dac_vals[CHANNELWIDTH][BUFFERSIZE];
+uint16_t alpha_vals[CHANNELWIDTH][BUFFERSIZE];
+uint16_t beta_vals[CHANNELWIDTH][BUFFERSIZE];
+uint16_t gamma_vals[CHANNELWIDTH][BUFFERSIZE];
 
 uint16_t conv_val;
 
-uint8_t ch;
+uint8_t ch, test;
 uint8_t ch_out = 0;
 
 uint8_t half_full_usb[CHANNELWIDTH] = {0};
@@ -79,8 +88,15 @@ uint8_t data_ready[CHANNELWIDTH] = {0};
 
 __IO uint32_t InjChannel = 0;
 
+int time_to_send;
+int delay_between_error_and_LED = 0;
+
+
 static volatile uint16_t* input_buffer_ptr[CHANNELWIDTH] = {&adc_vals[0][0], &adc_vals[1][0], &adc_vals[2][0], &adc_vals[3][0]};
-static volatile uint16_t* output_buffer_ptr[CHANNELWIDTH] = {&dac_vals[0][0], &dac_vals[1][0], &dac_vals[2][0], &dac_vals[3][0]};
+
+static volatile uint16_t* alpha_buffer_ptr[CHANNELWIDTH] = {&alpha_vals[0][0], &alpha_vals[1][0], &alpha_vals[2][0], &alpha_vals[3][0]};
+static volatile uint16_t* beta_buffer_ptr[CHANNELWIDTH] = {&beta_vals[0][0], &beta_vals[1][0], &beta_vals[2][0], &beta_vals[3][0]};
+static volatile uint16_t* gamma_buffer_ptr[CHANNELWIDTH] = {&gamma_vals[0][0], &gamma_vals[1][0], &gamma_vals[2][0], &gamma_vals[3][0]};
 
 IIR1 high_8_1[CHANNELWIDTH], high_8_2[CHANNELWIDTH], high_8_3[CHANNELWIDTH];
 
@@ -105,6 +121,45 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void package_point(uint16_t* final_packet_buffer, uint16_t* unpacked_buffer, uint16_t identifier, int final_packet_pointer, int buffer_pointer, int num_points) {
+    uint16_t zero = 0;
+    final_packet_buffer[final_packet_pointer * (num_points + 2)] = zero;
+    final_packet_buffer[final_packet_pointer * (num_points + 2) + 1] = identifier;
+    for (int i = 0; i < num_points; i++) {
+        final_packet_buffer[final_packet_pointer * (num_points + 2) + 2 + i] = unpacked_buffer[buffer_pointer + i];
+    }
+//    final_packet_buffer[final_packet_pointer * 3 + 2] = unpacked_buffer[buffer_pointer];
+
+}
+void package_several_points_per_buffer(uint16_t* final_packet_buffer, uint16_t** unpacked_buffers, int num_unpacked_buffers, int buffer_pointer, int num_points) {
+    for(int i = 0; i < num_unpacked_buffers; i++) {
+            package_point(final_packet_buffer, unpacked_buffers[i], (uint16_t) i, i, buffer_pointer, num_points);
+    //        track++;
+        }
+}
+
+void package_point_2(uint16_t* final_packet_buffer, uint16_t* unpacked_buffer, uint16_t identifier, int final_packet_pointer, int buffer_pointer, int num_points) {
+    uint16_t zero = 0;
+    final_packet_buffer[final_packet_pointer * (num_points + 2)] = zero;
+    final_packet_buffer[final_packet_pointer * (num_points + 2) + 1] = identifier;
+    for (int i = 0; i < num_points; i++) {
+        final_packet_buffer[final_packet_pointer * (num_points + 2) + 2 + i] = unpacked_buffer[buffer_pointer + i + DATASIZE];
+    }
+//    final_packet_buffer[final_packet_pointer * 3 + 2] = unpacked_buffer[buffer_pointer];
+
+}
+void package_several_points_per_buffer_2(
+        uint16_t* final_packet_buffer,
+        uint16_t** unpacked_buffers,
+        int num_unpacked_buffers,
+        int buffer_pointer,
+        int num_points) {
+    for(int i = 0; i < num_unpacked_buffers; i++) {
+            package_point_2(final_packet_buffer, unpacked_buffers[i], (uint16_t) i, i, buffer_pointer, num_points);
+    //        track++;
+        }
+}
+
 void DSP(uint8_t chl){
 
 	float in8high;
@@ -126,59 +181,64 @@ void DSP(uint8_t chl){
 	float out100low;
 
 	for(int i = 0; i < DATASIZE; i++){
-//		in8high = (float) (input_buffer_ptr[chl][i]);
-////		in12low = (float) (input_buffer_ptr[i]);
-//		in12high = (float) (input_buffer_ptr[chl][i]);
-////		in30low = (float) (input_buffer_ptr[i]);
-//		in30high = (float) (input_buffer_ptr[chl][i]);
-////		in100low = (float) (input_buffer_ptr[i]);
-//
-//		out8high = IIR1_Update(&high_8_1[chl], in8high);
-//		out8high = IIR1_Update(&high_8_2[chl], out8high);
-//		out8high = IIR1_Update(&high_8_3[chl], out8high) + 1500;
-//
-//		out12low = IIR1_Update(&low_12_1[chl], out8high);
-//		out12low = IIR1_Update(&low_12_2[chl], out12low);
-//		out12low = IIR1_Update(&low_12_3[chl], out12low);
-//		out12low *= 1.5;
-//
-//		out12high = IIR2_Update(&high_12_1[chl], in12high);
-//		out12high = IIR2_Update(&high_12_2[chl], out12high) + 1500;
-//		out12high *= 1.1;
-//
-//		out30low = IIR2_Update(&low_30_1[chl], out12high);
-//		out30low = IIR2_Update(&low_30_2[chl], out30low) + 14000;
-//
-//		out30high = IIR2_Update(&high_30_1[chl], in30high);
-//		out30high = IIR2_Update(&high_30_2[chl], out30high);
-//
-//		out100low = IIR2_Update(&low_100_1[chl], out30high);
-//		out100low = IIR2_Update(&low_100_2[chl], out100low) * 1;
-//
-//		output_buffer_ptr[chl][i] = ((uint16_t) (out30low)) >> 4;
-		output_buffer_ptr[chl][i] = input_buffer_ptr[chl][i] >> 4;
+		in8high = (float) (input_buffer_ptr[chl][i]);
+//		in12low = (float) (input_buffer_ptr[i]);
+		in12high = (float) (input_buffer_ptr[chl][i]);
+//		in30low = (float) (input_buffer_ptr[i]);
+		in30high = (float) (input_buffer_ptr[chl][i]);
+//		in100low = (float) (input_buffer_ptr[i]);
 
-//		alpha_buffer_ptr[i] = (uint32_t) (out12low);
-//		beta_buffer_ptr[i] = (uint32_t) (out30low);
-//		gamma_buffer_ptr[i] = (uint32_t) (out100low);
+		out8high = IIR1_Update(&high_8_1[chl], in8high);
+		out8high = IIR1_Update(&high_8_2[chl], out8high);
+		out8high = IIR1_Update(&high_8_3[chl], out8high) + 1500;
+
+		out12low = IIR1_Update(&low_12_1[chl], out8high);
+		out12low = IIR1_Update(&low_12_2[chl], out12low);
+		out12low = IIR1_Update(&low_12_3[chl], out12low) + 20000;
+		out12low *= 1.5;
+
+		out12high = IIR2_Update(&high_12_1[chl], in12high);
+		out12high = IIR2_Update(&high_12_2[chl], out12high) + 1500;
+		out12high *= 1.1;
+
+		out30low = IIR2_Update(&low_30_1[chl], out12high);
+		out30low = IIR2_Update(&low_30_2[chl], out30low) + 17000;
+
+		out30high = IIR2_Update(&high_30_1[chl], in30high);
+		out30high = IIR2_Update(&high_30_2[chl], out30high);
+
+		out100low = IIR2_Update(&low_100_1[chl], out30high);
+		out100low = IIR2_Update(&low_100_2[chl], out100low) + 7000;
+
+//		output_buffer_ptr[chl][i] = ((uint16_t) (out30low)) >> 4;
+
+		alpha_buffer_ptr[chl][i] = (uint32_t) (out12low);
+		beta_buffer_ptr[chl][i] = (uint32_t) (out30low);
+		gamma_buffer_ptr[chl][i] = (uint32_t) (out100low);
 	}
 	data_ready[chl] = 0;
+	if(half_flag[chl] == 1){
+		half_full_usb[chl] = 1;
+	}
+	else if (half_flag[chl] == 0){
+		full_usb[chl] = 1;
+	}
 }
 
-void DAC_Set(uint8_t chl){
-	if(ch_out == 0 && chl == 0){
-		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[0][conv_ctr[0]]);
-	}
-	else if(ch_out == 1 && chl == 1){
-		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[1][conv_ctr[1]]);
-	}
-	else if(ch_out == 2 && chl == 2){
-		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[2][conv_ctr[2]]);
-	}
-	else if(ch_out == 3 && chl == 3){
-		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[3][conv_ctr[3]]);
-	}
-}
+//void DAC_Set(uint8_t chl){
+//	if(ch_out == 0 && chl == 0){
+//		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[0][conv_ctr[0]]);
+//	}
+//	else if(ch_out == 1 && chl == 1){
+//		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[1][conv_ctr[1]]);
+//	}
+//	else if(ch_out == 2 && chl == 2){
+//		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[2][conv_ctr[2]]);
+//	}
+//	else if(ch_out == 3 && chl == 3){
+//		HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_vals[3][conv_ctr[3]]);
+//	}
+//}
 
 void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 {
@@ -186,10 +246,10 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
   if (hsdadc->Instance == SDADC1){
 	  // SDADC1 completed the injected conversion
 	  if(InjChannel == 2){
-		  ch = 0;
+		  ch = 1;
 	  }
 	  else if(InjChannel == 8){
-		  ch = 1;
+		  ch = 0;
 	  }
   }
   else if (hsdadc->Instance == SDADC2){
@@ -203,19 +263,23 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
   }
 
   adc_vals[ch][conv_ctr[ch]] = conv_val;
-  DAC_Set(ch);
+//  DAC_Set(ch);
 
   if((ctr[ch] == DATASIZE - 1)){
 	  if(half_flag[ch] == 0){ // first half filled
 		  input_buffer_ptr[ch] = &adc_vals[ch][0];
-		  output_buffer_ptr[ch] = &dac_vals[ch][0];
-		  half_full_usb[ch] = 1;
+//		  output_buffer_ptr[ch] = &dac_vals[ch][0];
+		  alpha_buffer_ptr[ch] = &alpha_vals[ch][0];
+		  beta_buffer_ptr[ch] = &beta_vals[ch][0];
+		  gamma_buffer_ptr[ch] = &gamma_vals[ch][0];
 		  half_flag[ch] = 1;
 	  }
 	  else if(half_flag[ch] == 1){ //second half filled
 		  input_buffer_ptr[ch] = &adc_vals[ch][DATASIZE];
-		  output_buffer_ptr[ch] = &dac_vals[ch][DATASIZE];
-		  full_usb[ch] = 1;
+//		  output_buffer_ptr[ch] = &dac_vals[ch][DATASIZE];
+		  alpha_buffer_ptr[ch] = &alpha_vals[ch][DATASIZE];
+		  beta_buffer_ptr[ch] = &beta_vals[ch][DATASIZE];
+		  gamma_buffer_ptr[ch] = &gamma_vals[ch][DATASIZE];
 		  half_flag[ch] = 0;
 	  }
 	  data_ready[ch] = 1;
@@ -228,6 +292,7 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   ch_out = (ch_out == 3) ? 0 : ch_out + 1;
+  test = 1;
 }
 
 /* USER CODE END 0 */
@@ -270,6 +335,7 @@ int main(void)
   MX_TIM17_Init();
   MX_SDADC2_Init();
   /* USER CODE BEGIN 2 */
+//  aux_retrigger_usb();
 
   // INIT FILTERS
   for(int i = 0; i < CHANNELWIDTH; i++){
@@ -313,6 +379,24 @@ int main(void)
   HAL_SDADC_InjectedStart_IT(&hsdadc2);
   HAL_DAC_Start(&hdac2, DAC_CHANNEL_1);
   ch_out = 0;
+  test = 0;
+  uint16_t* dac_buffers[] = {
+		alpha_vals[0],
+		beta_vals[0],
+		gamma_vals[0],
+		alpha_vals[1],
+		beta_vals[1],
+		gamma_vals[1],
+		alpha_vals[2],
+		beta_vals[2],
+		gamma_vals[2],
+		alpha_vals[3],
+		beta_vals[3],
+		gamma_vals[3]
+	};
+
+  delay_between_error_and_LED = 47;
+
 
   /* USER CODE END 2 */
 
@@ -332,6 +416,44 @@ int main(void)
 	  if(data_ready[3]){
 		  DSP(3);
 	  }
+
+	  if(test){
+		  if(half_full_usb[0] == 1 && half_full_usb[1] == 1 && half_full_usb[2] == 1 &&half_full_usb[3] == 1) {
+
+			half_full_usb[0] = 0;
+			half_full_usb[1] = 0;
+			half_full_usb[2] = 0;
+			half_full_usb[3] = 0;
+			int buffer_index_counter = 0;
+			int start_time;
+			int finish_time;
+			start_time = HAL_GetTick();
+
+			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
+//			  start_time = HAL_GetTick();
+			  package_several_points_per_buffer(live_read_packet, dac_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
+			  buffer_index_counter += DATA_POINTS_PER_PACKET;
+			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+			}
+			finish_time = HAL_GetTick();
+		    time_to_send = finish_time - start_time;
+		  }
+		  if(full_usb[0] == 1 && full_usb[1] == 1 && full_usb[2] == 1 && full_usb[3] == 1) {
+
+			full_usb[0] = 0;
+			full_usb[1] = 0;
+			full_usb[2] = 0;
+			full_usb[3] = 0;
+			int buffer_index_counter = DATASIZE;
+
+			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
+			  package_several_points_per_buffer(live_read_packet, dac_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
+			  buffer_index_counter += DATA_POINTS_PER_PACKET;
+			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+		    }
+		  }
+      }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

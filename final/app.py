@@ -9,7 +9,7 @@ class App():
         
         self.root = None
         self.root = tk.Tk()
-        self.root.geometry("400x500")
+        self.root.geometry("1600x900")
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
         
         self.root.configure(bg=self.BG_COLOR)

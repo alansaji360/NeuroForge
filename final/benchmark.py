@@ -41,11 +41,66 @@ class Benchmark():
             print(f"Error loading file: {e}")
             tk.messagebox.showerror("File Error", f"Could not load file: {e}")
     
+    def loadFromFile(self, filename):
+        """Load data from file"""
+        try:
+            self.data = {
+                'timestamps': [],
+                'channels': {}
+            }
+            
+            with open(filename, 'r') as file:
+                # Read header first
+                header = next(csv.reader(file))
+                
+                # Parse header to determine number of channels and waves
+                # First column is timestamp
+                channel_wave_columns = header[1:]
+                
+                # Initialize data structure based on header
+                for col in channel_wave_columns:
+                    # Parse column name (format: ch0_alpha_sample0, ch0_beta_sample0, etc.)
+                    parts = col.split('_')
+                    if len(parts) >= 2:
+                        channel = parts[0]  # ch0, ch1, etc.
+                        wave_type = parts[1]  # alpha, beta, gamma
+                        
+                        if channel not in self.data['channels']:
+                            self.data['channels'][channel] = {}
+                        
+                        if wave_type not in self.data['channels'][channel]:
+                            self.data['channels'][channel][wave_type] = []
+                
+                # Read data
+                for row in csv.reader(file):
+                    if not row:  # Skip empty rows
+                        continue
+                    
+                    # First column is timestamp
+                    self.data['timestamps'].append(float(row[0]))
+                    
+                    # Process each channel and wave type
+                    current_col = 1
+                    for channel in sorted(self.data['channels'].keys()):
+                        for wave_type in ['alpha', 'beta', 'gamma']:
+                            # Each wave type has 64 samples
+                            wave_data = [float(x) for x in row[current_col:current_col + 64]]
+                            self.data['channels'][channel][wave_type].extend(wave_data)
+                            current_col += 64
+            
+            self.plotData()
+
+        except Exception as e:
+            print(f"Error loading file: {e}")
+            tk.messagebox.showerror("File Error", f"Could not load file: {e}")
+    
     def plotData(self):
         """Plot the loaded data"""
         if self.fig is None:
-            self.fig = plt.Figure(figsize=(7, 4), dpi=100, facecolor='#141414')
-            self.ax = self.fig.add_subplot(111)
+            # Create figure with subplots for each channel
+            num_channels = len(self.data['channels'])
+            self.fig = plt.Figure(figsize=(12, 4 * num_channels), dpi=100, facecolor='#141414')
+            self.ax = [self.fig.add_subplot(num_channels, 1, i+1) for i in range(num_channels)]
 
             self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -53,34 +108,34 @@ class Benchmark():
             toolbar = NavigationToolbar2Tk(self.canvas, self.root)
             toolbar.update()
             self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        # self.ax.clear()
 
-        # self.ax.plot(self.data, color='b')
-        # self.ax.set_title('Loaded Data from File')
-        # self.ax.set_xlabel('Samples')
-        # self.ax.set_ylabel('Amplitude')
+        # Clear all subplots
+        for axis in self.ax:
+            axis.clear()
+            axis.set_facecolor('#141414')
 
-        # self.ax.set_xlim(0, len(self.data))  
-        # self.ax.relim()  
-        # self.ax.autoscale_view() 
+        # Plot data for each channel
+        colors = {'alpha': 'cyan', 'beta': 'magenta', 'gamma': 'yellow'}
+        
+        for i, (channel, waves) in enumerate(sorted(self.data['channels'].items())):
+            for wave_type, wave_data in waves.items():
+                self.ax[i].plot(wave_data, 
+                               color=colors[wave_type], 
+                               label=f'{wave_type.capitalize()}',
+                               alpha=0.8)
+            
+            self.ax[i].set_title(f'Channel {channel} Data', color='white')
+            self.ax[i].set_xlabel('Samples', color='white')
+            self.ax[i].set_ylabel('Amplitude', color='white')
+            
+            self.ax[i].tick_params(axis='both', colors='white')
+            self.ax[i].grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+            self.ax[i].legend()
 
-        # self.canvas.draw()
+            # Set reasonable y-axis limits
+            self.ax[i].set_ylim(-1000, 40000)  # Adjust these values based on your data range
 
-        self.ax.clear()
-        self.ax.set_facecolor('#141414') 
-
-        self.ax.plot(self.data, color='cyan') 
-        self.ax.set_title('Loaded Data from File', color='white')  
-        self.ax.set_xlabel('Samples', color='white') 
-        self.ax.set_ylabel('Amplitude', color='white') 
-
-        self.ax.set_xlim(0, len(self.data) if len(self.data) > 0 else 1)
-        self.ax.relim()
-        self.ax.autoscale_view()
-
-        self.ax.tick_params(axis='both', colors='white') 
-        self.ax.grid(color='gray', linestyle='--', linewidth=0.5)  
-
+        self.fig.tight_layout()
         self.canvas.draw()
 
     def benchmarkMenu(self):

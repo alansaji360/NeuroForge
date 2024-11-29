@@ -87,7 +87,6 @@ void NMI_Handler(void)
   * @brief This function handles Hard fault interrupt.
   */
 void HardFault_Handler(void)
-
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);

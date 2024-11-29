@@ -70,7 +70,7 @@ void MX_SDADC1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_SDADC_InjectedConfigChannel(&hsdadc1, SDADC_CHANNEL_8|SDADC_CHANNEL_2, SDADC_CONTINUOUS_CONV_ON) != HAL_OK)
+  if (HAL_SDADC_InjectedConfigChannel(&hsdadc1, SDADC_CHANNEL_2|SDADC_CHANNEL_8, SDADC_CONTINUOUS_CONV_ON) != HAL_OK)
   {
     Error_Handler();
   }

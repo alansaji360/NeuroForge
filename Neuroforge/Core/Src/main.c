@@ -280,6 +280,32 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   usb_start = 1;
 }
 
+void usb_retrigger() {
+//    GPIO_InitTypeDef GPIO_InitStructure;
+
+//    GPIO_InitStructure.Pin = GPIO_PIN_12;
+//    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+//    GPIO_InitStructure.Pull = GPIO_NOPULL;
+//    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+//    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
+
+    HAL_Delay(100);
+
+//    GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
+//    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    MX_USB_DEVICE_Init();
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_SET);
+
+
+//    USBD_Start(&hUsbDeviceFS);
+
+    return;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -316,12 +342,12 @@ int main(void)
   MX_SDADC1_Init();
   MX_TIM6_Init();
   MX_TIM13_Init();
-  MX_USB_DEVICE_Init();
+//  MX_USB_DEVICE_Init();
   MX_TIM17_Init();
   MX_SDADC2_Init();
   /* USER CODE BEGIN 2 */
-//  aux_retrigger_usb();
 
+  usb_retrigger();
   // INIT FILTERS
   for(int i = 0; i < CHANNELWIDTH/2; i++){
 	// 8 Hz High

@@ -3,7 +3,7 @@ import numpy as np
 import mne
 
 # Initialize serial connection (replace 'COM3' with the correct port for your device)
-ser = serial.Serial('COM2', baudrate=115200, timeout=1)  # Adjust baud rate as necessary
+ser = serial.Serial('COM6', baudrate=115200, timeout=1)  # Adjust baud rate as necessary
 
 # Define variables
 n_channels = 4  # Number of EEG channels

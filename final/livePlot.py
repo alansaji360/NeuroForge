@@ -9,9 +9,9 @@ class LivePlot():
         self.BAUD_RATE = 115200                         # Change to the appropriate baud rate
         self.SAMPLE_RATE = 18000                        # Define the sampling rate (Hz)
         self.NUM_CHANNELS = n_channels                  # Number of channels to read
-        self.BUFFER_SIZE = 10000                         # Buffer size
+        self.BUFFER_SIZE = 5000                         # Buffer size
         self.Y_MIN = -1000                              # Maximum y-axis value
-        self.Y_MAX = 40000                              # Maximum y-axis value
+        self.Y_MAX = 60000                              # Maximum y-axis value
         self.FILENAME = 'waveform_data.csv'             # Filename to save data
 
         self.first_data_time = None
@@ -93,8 +93,10 @@ class LivePlot():
         self.pause_event = threading.Event()  # Event to pause the thread
 
         if self.enable:
-            self.startThreads()
             self.updatePlot()
+            self.startThreads()
+            # time.sleep(1000) 
+            
 
     def startThreads(self):
         """Start the read and save threads"""
@@ -117,7 +119,7 @@ class LivePlot():
 
     def readSerialData(self):
         """Read data from serial in a separate thread"""
-        frame_size = 132  # 66 uint16 (2 bytes each)
+        frame_size = 68  # 66 uint16 (2 bytes each) 5
 
         while not self.stop_event.is_set():
             if self.ser is not None:
@@ -130,17 +132,17 @@ class LivePlot():
                         print(f"First data received at: {self.first_data_time}")
 
                     frame = self.ser.read(frame_size)
-                    data = struct.unpack('<66H', frame) 
+                    data = struct.unpack('<34H', frame) 
 
                     header = data[0]        # 1st uint16 for header
                     id = data[1]            # 2nd uint16 0-12 channel/wave type 
-                    data = data[2:]         # Remaining 16 uint16 for sample values
+                    data = data[2:]         # Remaining uint16 for sample values
 
                     channel = (id // 3)
                     wave_type = id % 3
                     
                     #  debug 
-                    # print(f"Header: {id} Wave Type: {wave_type} Channel: {channel} Data: {data[0]}")
+                    # print(f"Header: {id} Wave Type: {wave_type} Channel: {channel} Data: {data}")
 
                     if header == 0 and channel in self.buffers:
                         wave_name = self.get_wave_name(wave_type)
@@ -148,8 +150,8 @@ class LivePlot():
                         if wave_name:
                             buffer = self.buffers[channel][wave_name]
 
-                            buffer[:-64] = buffer[64:]
-                            buffer[-64:] = data
+                            buffer[:-32] = buffer[32:]
+                            buffer[-32:] = data
 
                             try:
                                 save_data = {
@@ -234,60 +236,6 @@ class LivePlot():
 
     def updatePlot(self):
         """Update the plot with the latest data"""
-        # if self.sample_index > 0:
-        #     self.ax.clear()
-
-        #     self.ax.plot(self.data_buffer[0], color='b')
-        #     self.ax.set_title(f"Channel {self.NUM_CHANNELS}")
-        #     self.ax.set_xlabel('Samples')
-        #     self.ax.set_ylabel('Amplitude')
-        #     self.ax.set_ylim(-1000, 4500)
-
-        #     self.canvas.draw()
-        # self.root.after(1, self.updatePlot)
-
-        # self.ax.clear()
-
-        # # Plot each wave type
-        # self.ax.plot(self.alpha_buffer, color='b', label="Alpha")
-        # self.ax.plot(self.beta_buffer, color='g', label="Beta")
-        # self.ax.plot(self.gamma_buffer, color='r', label="Gamma")
-
-        # self.ax.set_title("Alpha, Beta, and Gamma Waves")
-        # self.ax.set_xlabel('Samples')
-        # self.ax.set_ylabel('Amplitude')
-        # self.ax.set_ylim(self.Y_MIN, self.Y_MAX)
-        # self.ax.legend()
-
-        # self.canvas.draw()
-        # self.root.after(1, self.updatePlot)
-
-        # self.ax.clear()  # Clear the plot
-        # if self.NUM_CHANNELS > 1:
-        #     for ax in self.ax:
-        #         ax.clear()  # Clear each subplot
-        # else:
-        #     self.ax.clear()  # Single channel case, self.ax is not an array
-
-
-        # for ch in range(self.NUM_CHANNELS):
-        #     alpha_data = self.buffers[ch]['alpha']
-        #     beta_data = self.buffers[ch]['beta']
-        #     gamma_data = self.buffers[ch]['gamma']
-
-        #     # Plot each wave type with a different color
-        #     self.ax.plot(alpha_data, label=f'Alpha (Ch {ch})', color='blue')
-        #     self.ax.plot(beta_data, label=f'Beta (Ch {ch})', color='green')
-        #     self.ax.plot(gamma_data, label=f'Gamma (Ch {ch})', color='red')
-
-        # self.ax.set_ylim(-1000, 4500)  # Adjust based on signal range
-        # self.ax.set_title("Real-Time EEG Data (Multi-Channel)")
-        # self.ax.set_xlabel("Samples")
-        # self.ax.set_ylabel("Amplitude")
-        # self.ax.legend()
-        # self.canvas.draw()
-
-        # self.root.after(1, self.updatePlot)
         try:
             for ch, ax in enumerate(self.ax):
                 # print(f"Channel {ch}")
@@ -319,7 +267,7 @@ class LivePlot():
                     print(f"Data acquisition to first plot latency: {latency:.3f} seconds")
 
             self.canvas.draw()
-            self.root.after(1, self.updatePlot)
+            self.root.after(10, self.updatePlot)
         except Exception as e:
             print(f"Error updating plot: {e}")
 

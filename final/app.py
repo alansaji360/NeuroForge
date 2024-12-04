@@ -78,9 +78,9 @@ class App():
 
         self.buttons.createGlowText(self.root, "NEUROFORGE", "#FF00FF", self.BG_COLOR, size=36)
 
-        self.buttons.createButton(self.root, "LIVE PLOT",   self.toggleLivePlot)
-        self.buttons.createButton(self.root, "BENCHMARK",   self.toggleBenchmark)
-        self.buttons.createButton(self.root, "EXIT",        exit)
+        self.buttons.createButton(self.root, "NEUROVISUALIZATON",   self.toggleLivePlot)
+        self.buttons.createButton(self.root, "NEUROBENCHMARK",   self.toggleBenchmark)
+        self.buttons.createButton(self.root, "NEUROEXIT",        exit)
 
         slider_label = tk.Label(self.root, text="SELECT NUMBER OF CHANNELS", bg=self.BG_COLOR, fg="white")
         slider_label.pack(pady=5)

@@ -54,22 +54,25 @@
 
 /* USER CODE BEGIN PV */
 // # samples per data block(half buffer)
-#define DATASIZE 128
+#define DATASIZE 32
 // full buffer size
 #define BUFFERSIZE DATASIZE * 2
 #define CHANNELWIDTH 4
 
 //USB CONSTANTS
-#define DATA_POINTS_PER_PACKET 64
+#define DATA_POINTS_PER_PACKET 32
 #define NUM_BUFFERS_TO_PACK 12
 #define LIVE_READ_PACKET_SIZE ((DATA_POINTS_PER_PACKET + 2) * NUM_BUFFERS_TO_PACK)
 
 uint16_t live_read_packet[LIVE_READ_PACKET_SIZE];
+uint16_t live_read_packet_2[LIVE_READ_PACKET_SIZE];
 
 uint16_t adc_vals[CHANNELWIDTH][BUFFERSIZE];
 uint16_t alpha_vals[CHANNELWIDTH][BUFFERSIZE];
 uint16_t beta_vals[CHANNELWIDTH][BUFFERSIZE];
 uint16_t gamma_vals[CHANNELWIDTH][BUFFERSIZE];
+
+uint16_t test[BUFFERSIZE];
 
 uint16_t conv_val;
 
@@ -106,6 +109,16 @@ IIR2 low_30_1[CHANNELWIDTH], low_30_2[CHANNELWIDTH];
 IIR2 high_30_1[CHANNELWIDTH], high_30_2[CHANNELWIDTH];
 
 IIR2 low_100_1[CHANNELWIDTH], low_100_2[CHANNELWIDTH];
+
+
+// TEMP VARIABLES
+int num_packets_per_flag;
+int half_repeated = 0;
+int full_repeated = 0;
+int half_entered = 0;
+int full_entered = 0;
+int last_half_sent = 0;
+
 
 /* USER CODE END PV */
 
@@ -157,7 +170,37 @@ void package_several_points_per_buffer_2(
         }
 }
 
-void DSP(uint8_t chl){
+int aux_retrigger_usb()
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+//    USBD_Stop(&hUsbDeviceFS);
+    HAL_Delay(100);
+//    USBD_DeInit(&hUsbDeviceFS);
+
+//    MX_USB_DEVICE_Init();
+
+//    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
+
+
+    // Delay to ensure the host detects the disconnect
+    HAL_Delay(500);
+    MX_USB_DEVICE_Init();
+
+//    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+
+    HAL_Delay(500);  // Small delay for stability
+
+    // Initialize USB Device
+//    MX_USB_DEVICE_Init();
+
+    // Start the USB device
+//    USBD_Start(&hUsbDeviceFS);
+    return 1;
+}
+
+void DSP(uint8_t chl, uint8_t flag){
 
 	float in8high;
 	float out8high;
@@ -192,33 +235,34 @@ void DSP(uint8_t chl){
 		out12low = IIR1_Update(&low_12_1[chl], out8high);
 		out12low = IIR1_Update(&low_12_2[chl], out12low);
 		out12low = IIR1_Update(&low_12_3[chl], out12low) + 20000;
-		out12low *= 2.7;
 
 		out12high = IIR2_Update(&high_12_1[chl], in12high);
 		out12high = IIR2_Update(&high_12_2[chl], out12high);
 
 		out30low = IIR2_Update(&low_30_1[chl], out12high);
 		out30low = IIR2_Update(&low_30_2[chl], out30low) + 15000;
-		out30low *= 1.5;
 
 		out30high = IIR2_Update(&high_30_1[chl], in30high);
 		out30high = IIR2_Update(&high_30_2[chl], out30high);
 
 		out100low = IIR2_Update(&low_100_1[chl], out30high);
 		out100low = IIR2_Update(&low_100_2[chl], out100low) + 15000;
-		if(chl == 2 || chl == 3){
-			out100low *= 1.8;
-		}
 
-		alpha_buffer_ptr[chl][i] = (uint32_t) (out12low);
-		beta_buffer_ptr[chl][i] = (uint32_t) (out30low);
-		gamma_buffer_ptr[chl][i] = (uint32_t) (out100low);
+//		alpha_buffer_ptr[chl][i] = (uint16_t) (out12low);
+//		beta_buffer_ptr[chl][i] = (uint16_t) (out30low);
+//		gamma_buffer_ptr[chl][i] = (uint16_t) (out100low);
+
+//		if(chl == 0){
+			alpha_buffer_ptr[chl][i] = input_buffer_ptr[chl][i];
+			beta_buffer_ptr[chl][i] = 0;
+			gamma_buffer_ptr[chl][i] = 0;
+//		}
 	}
 	data_ready[chl] = 0;
-	if(half_flag[chl] == 1){
+	if(flag == 1){
 		half_full_usb[chl] = 1;
 	}
-	else if (half_flag[chl] == 0){
+	else if (flag == 0){
 		full_usb[chl] = 1;
 	}
 }
@@ -245,9 +289,10 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 	  }
   }
 
-  adc_vals[ch][conv_ctr[ch]] = conv_val;
+  HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, alpha_vals[0][conv_ctr[0]]);
 
-//  HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, gamma_vals[1][conv_ctr[1]]);
+
+  adc_vals[ch][conv_ctr[ch]] = conv_val;
 
   if((ctr[ch] == DATASIZE - 1)){
 	  if(half_flag[ch] == 0){ // first half filled
@@ -278,6 +323,21 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   usb_start = 1;
+
+//  __disable_irq();
+//
+//  // Start Timer 7
+//  HAL_TIM_Base_Start(&htim7);
+//
+//  while (__HAL_TIM_GET_COUNTER(&htim7) < 3599) {
+//  }
+//
+//  // Stop Timer 7
+//  HAL_TIM_Base_Stop(&htim7);
+//  __HAL_TIM_SET_COUNTER(&htim7, 0);
+//
+//  // Re-enable interrupts
+//  __enable_irq();
 }
 
 /* USER CODE END 0 */
@@ -306,6 +366,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  __disable_irq();
 
   /* USER CODE END SysInit */
 
@@ -319,7 +380,9 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_TIM17_Init();
   MX_SDADC2_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
+  __enable_irq();
 //  aux_retrigger_usb();
 
   // INIT FILTERS
@@ -362,8 +425,8 @@ int main(void)
 	IIR1_Init(&low_12_3[i], -0.9810, 0.0095, 0.0095);
 
 	// 12 Hz High
-	IIR2_Init(&high_12_1[i], -1.9942, 0.9942, 0.9306, -1.8611, 0.9306);
-	IIR2_Init(&high_12_2[i], -1.9852, 0.9853, 0.9926, -1.9852, 0.9926);
+	IIR2_Init(&high_12_1[i], -1.995658, 0.995741, 0.997868, -1.995662, 0.997868);
+	IIR2_Init(&high_12_2[i], -1.988646, 0.988710, 0.994339, -1.988678, 0.994339);
 
 	// 30 Hz low
 	IIR2_Init(&low_30_1[i], -1.9787, 0.9798, 0.5568, -1.1125, 0.5568);
@@ -398,15 +461,15 @@ int main(void)
 		alpha_vals[1],
 		beta_vals[1],
 		gamma_vals[1],
-		alpha_vals[2],
-		beta_vals[2],
-		gamma_vals[2],
+	    alpha_vals[2],
+	    beta_vals[2],
+	    gamma_vals[2],
 		alpha_vals[3],
 		beta_vals[3],
 		gamma_vals[3]
 	};
 
-
+//  aux_retrigger_usb();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -414,48 +477,100 @@ int main(void)
   while (1)
   {
 	  if(data_ready[0]){
-		  DSP(0);
+		  DSP(0, half_flag[0]);
 	  }
 	  if(data_ready[1]){
-		  DSP(1);
+		  DSP(1, half_flag[1]);
 	  }
 	  if(data_ready[2]){
-		  DSP(2);
+		  DSP(2, half_flag[2]);
 	  }
 	  if(data_ready[3]){
-		  DSP(3);
+		  DSP(3, half_flag[3]);
 	  }
 
 	  if(usb_start){
-		  if(half_full_usb[0] == 1 && half_full_usb[1] == 1 && half_full_usb[2] == 1 &&half_full_usb[3] == 1) {
+//		  if(half_full_usb[0] == 1 && half_full_usb[1] == 1 && half_full_usb[2] == 1 && half_full_usb[3] == 1 && last_half_sent == 2) {
+//
+//			half_full_usb[0] = 0;
+//			half_full_usb[1] = 0;
+//			half_full_usb[2] = 0;
+//			half_full_usb[3] = 0;
+//			int buffer_index_counter = 0;
+//			int num_loops = 0;
+//
+//			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
+////			  start_time = HAL_GetTick();
+//			  package_several_points_per_buffer(live_read_packet, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
+//			  buffer_index_counter += DATA_POINTS_PER_PACKET;
+//			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+//			  num_loops++;
+//			  if (num_loops > num_packets_per_flag) {
+//				  num_packets_per_flag = num_loops;
+//			  }
+//			}
+//			last_half_sent = 1;
+//		  }
+//		  if(full_usb[0] == 1 && full_usb[1] == 1 && full_usb[2] == 1 && full_usb[3] == 1 && last_half_sent == 1) {
+//
+//			full_usb[0] = 0;
+//			full_usb[1] = 0;
+//			full_usb[2] = 0;
+//			full_usb[3] = 0;
+//			int buffer_index_counter = DATASIZE;
+//
+//			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
+//			  package_several_points_per_buffer(live_read_packet_2, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
+//			  buffer_index_counter += DATA_POINTS_PER_PACKET;
+//			  CDC_Transmit_FS((uint8_t*)&live_read_packet_2, sizeof(live_read_packet_2));
+//		    }
+//			last_half_sent = 2;
+//		  }
+		  if(half_full_usb[0] == 1 && half_full_usb[1] == 1 && half_full_usb[2] == 1 && half_full_usb[3] == 1) {
+			  	  	if (last_half_sent == 1) {
+			  	  		half_repeated++;
+			  	  	}
+			  	  	half_entered++;
 
-			half_full_usb[0] = 0;
-			half_full_usb[1] = 0;
-			half_full_usb[2] = 0;
-			half_full_usb[3] = 0;
-			int buffer_index_counter = 0;
 
-			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
-//			  start_time = HAL_GetTick();
-			  package_several_points_per_buffer(live_read_packet, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
-			  buffer_index_counter += DATA_POINTS_PER_PACKET;
-			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
-			}
-		  }
-		  if(full_usb[0] == 1 && full_usb[1] == 1 && full_usb[2] == 1 && full_usb[3] == 1) {
+		  			half_full_usb[0] = 0;
+		  			half_full_usb[1] = 0;
+		  			half_full_usb[2] = 0;
+		  			half_full_usb[3] = 0;
+		  			int buffer_index_counter = 0;
+		  			int num_loops = 0;
 
-			full_usb[0] = 0;
-			full_usb[1] = 0;
-			full_usb[2] = 0;
-			full_usb[3] = 0;
-			int buffer_index_counter = DATASIZE;
+		  			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
+		  //			  start_time = HAL_GetTick();
+		  			  package_several_points_per_buffer(live_read_packet, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
+		  			  buffer_index_counter += DATA_POINTS_PER_PACKET;
+		  			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+		  			  num_loops++;
+		  			  if (num_loops > num_packets_per_flag) {
+		  				  num_packets_per_flag = num_loops;
+		  			  }
+		  			}
+		  			last_half_sent = 1;
+		  		  }
+		  		  if(full_usb[0] == 1 && full_usb[1] == 1 && full_usb[2] == 1 && full_usb[3] == 1) {
+		  			full_entered++;
+		  			full_usb[0] = 0;
+		  			full_usb[1] = 0;
+		  			full_usb[2] = 0;
+		  			full_usb[3] = 0;
+		  			if (last_half_sent == 2) {
+		  				full_repeated++;
+		  			}
+		  			int buffer_index_counter = DATASIZE;
 
-			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
-			  package_several_points_per_buffer(live_read_packet, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
-			  buffer_index_counter += DATA_POINTS_PER_PACKET;
-			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
-		    }
-		  }
+		  			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
+		  			  package_several_points_per_buffer(live_read_packet_2, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
+		  			  buffer_index_counter += DATA_POINTS_PER_PACKET;
+		  			  CDC_Transmit_FS((uint8_t*)&live_read_packet_2, sizeof(live_read_packet_2));
+
+		  		    }
+		  			last_half_sent = 2;
+		  		  }
       }
 
     /* USER CODE END WHILE */
@@ -517,6 +632,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 
 /* USER CODE END 4 */
 

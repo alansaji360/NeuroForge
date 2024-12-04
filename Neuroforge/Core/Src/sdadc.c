@@ -58,7 +58,7 @@ void MX_SDADC1_Init(void)
 
   /** Configure the Injected Mode
   */
-  if (HAL_SDADC_SelectInjectedDelay(&hsdadc1, SDADC_INJECTED_DELAY_NONE) != HAL_OK)
+  if (HAL_SDADC_SelectInjectedDelay(&hsdadc1, SDADC_INJECTED_DELAY) != HAL_OK)
   {
     Error_Handler();
   }
@@ -135,7 +135,7 @@ void MX_SDADC2_Init(void)
 
   /** Configure the Injected Mode
   */
-  if (HAL_SDADC_SelectInjectedDelay(&hsdadc2, SDADC_INJECTED_DELAY_NONE) != HAL_OK)
+  if (HAL_SDADC_SelectInjectedDelay(&hsdadc2, SDADC_INJECTED_DELAY) != HAL_OK)
   {
     Error_Handler();
   }

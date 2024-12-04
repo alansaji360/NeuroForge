@@ -447,6 +447,7 @@ int main(void)
   HAL_SDADC_CalibrationStart(&hsdadc2, SDADC_CALIBRATION_SEQ_1);
   HAL_SDADC_PollForCalibEvent(&hsdadc2, 10);
 
+
   HAL_TIM_Base_Start(&htim6);
   HAL_TIM_PWM_Start(&htim13, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);

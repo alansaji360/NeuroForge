@@ -54,13 +54,13 @@
 
 /* USER CODE BEGIN PV */
 // # samples per data block(half buffer)
-#define DATASIZE 32
+#define DATASIZE 128
 // full buffer size
 #define BUFFERSIZE DATASIZE * 2
 #define CHANNELWIDTH 4
 
 //USB CONSTANTS
-#define DATA_POINTS_PER_PACKET 32
+#define DATA_POINTS_PER_PACKET 128
 #define NUM_BUFFERS_TO_PACK 12
 #define LIVE_READ_PACKET_SIZE ((DATA_POINTS_PER_PACKET + 2) * NUM_BUFFERS_TO_PACK)
 
@@ -118,7 +118,10 @@ int full_repeated = 0;
 int half_entered = 0;
 int full_entered = 0;
 int last_half_sent = 0;
-
+int usb_success = 0;
+int usb_success_2 = 0;
+int usb_busy = 0;
+int usb_busy_2 = 0;
 
 /* USER CODE END PV */
 
@@ -248,14 +251,14 @@ void DSP(uint8_t chl, uint8_t flag){
 		out100low = IIR2_Update(&low_100_1[chl], out30high);
 		out100low = IIR2_Update(&low_100_2[chl], out100low) + 15000;
 
-//		alpha_buffer_ptr[chl][i] = (uint16_t) (out12low);
-//		beta_buffer_ptr[chl][i] = (uint16_t) (out30low);
-//		gamma_buffer_ptr[chl][i] = (uint16_t) (out100low);
+		alpha_buffer_ptr[chl][i] = (uint16_t) (out12low);
+		beta_buffer_ptr[chl][i] = (uint16_t) (out30low);
+		gamma_buffer_ptr[chl][i] = (uint16_t) (out100low);
 
 //		if(chl == 0){
-			alpha_buffer_ptr[chl][i] = input_buffer_ptr[chl][i];
-			beta_buffer_ptr[chl][i] = 0;
-			gamma_buffer_ptr[chl][i] = 0;
+//			alpha_buffer_ptr[chl][i] = input_buffer_ptr[chl][i];
+//			beta_buffer_ptr[chl][i] = 0;
+//			gamma_buffer_ptr[chl][i] = 0;
 //		}
 	}
 	data_ready[chl] = 0;
@@ -265,6 +268,28 @@ void DSP(uint8_t chl, uint8_t flag){
 	else if (flag == 0){
 		full_usb[chl] = 1;
 	}
+
+//	half_full_usb[2] = 1;
+//	half_full_usb[3] = 1;
+//	full_usb[2] = 1;
+//	full_usb[3] = 1;
+}
+
+void Cycle_Delay(uint16_t cycles_to_wait){
+  __disable_irq();
+
+  // Start Timer 7
+  HAL_TIM_Base_Start(&htim7);
+
+  while (__HAL_TIM_GET_COUNTER(&htim7) < cycles_to_wait) {
+  }
+
+  // Stop Timer 7
+  HAL_TIM_Base_Stop(&htim7);
+  __HAL_TIM_SET_COUNTER(&htim7, 0);
+
+  // Re-enable interrupts
+  __enable_irq();
 }
 
 void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
@@ -273,10 +298,10 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
   if (hsdadc->Instance == SDADC1){
 	  // SDADC1 completed the injected conversion
 	  if(InjChannel == 2){
-		  ch = 1;
-	  }
-	  else if(InjChannel == 8){
 		  ch = 0;
+	  }
+	  else if(InjChannel == 4){
+		  ch = 1;
 	  }
   }
   else if (hsdadc->Instance == SDADC2){
@@ -284,7 +309,7 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 	  if(InjChannel == 2){
 		  ch = 2;
 	  }
-	  else if(InjChannel == 0){
+	  else if(InjChannel == 1){
 		  ch = 3;
 	  }
   }
@@ -324,20 +349,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   usb_start = 1;
 
-//  __disable_irq();
-//
-//  // Start Timer 7
-//  HAL_TIM_Base_Start(&htim7);
-//
-//  while (__HAL_TIM_GET_COUNTER(&htim7) < 3599) {
-//  }
-//
-//  // Stop Timer 7
-//  HAL_TIM_Base_Stop(&htim7);
-//  __HAL_TIM_SET_COUNTER(&htim7, 0);
-//
-//  // Re-enable interrupts
-//  __enable_irq();
+  __disable_irq();
+
+  // Start Timer 7
+  HAL_TIM_Base_Start(&htim7);
+
+  while (__HAL_TIM_GET_COUNTER(&htim7) < 20000) {
+  }
+
+  // Stop Timer 7
+  HAL_TIM_Base_Stop(&htim7);
+  __HAL_TIM_SET_COUNTER(&htim7, 0);
+
+  // Re-enable interrupts
+  __enable_irq();
 }
 
 /* USER CODE END 0 */
@@ -545,7 +570,12 @@ int main(void)
 		  //			  start_time = HAL_GetTick();
 		  			  package_several_points_per_buffer(live_read_packet, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
 		  			  buffer_index_counter += DATA_POINTS_PER_PACKET;
-		  			  CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+		  			  int result = CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
+		  			  if(result == 0) {
+		  				  usb_success++;
+		  			  } else if(result == 1) {
+		  				  usb_busy++;
+		  			  }
 		  			  num_loops++;
 		  			  if (num_loops > num_packets_per_flag) {
 		  				  num_packets_per_flag = num_loops;
@@ -567,7 +597,12 @@ int main(void)
 		  			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
 		  			  package_several_points_per_buffer(live_read_packet_2, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
 		  			  buffer_index_counter += DATA_POINTS_PER_PACKET;
-		  			  CDC_Transmit_FS((uint8_t*)&live_read_packet_2, sizeof(live_read_packet_2));
+		  			  int result = CDC_Transmit_FS((uint8_t*)&live_read_packet_2, sizeof(live_read_packet_2));
+		  			  if(result == 0) {
+		  				  usb_success_2++;
+					  } else if(result == 1) {
+						  usb_busy_2++;
+					  }
 
 		  		    }
 		  			last_half_sent = 2;

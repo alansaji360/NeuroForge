@@ -5,7 +5,7 @@ class LivePlot():
         """Initialize Live_Plot object"""
         self.root = root
         
-        self.COM_PORT = 'COM6'                          # Change to your COM port
+        self.COM_PORT = 'COM7'                          # Change to your COM port
         self.BAUD_RATE = 115200                         # Change to the appropriate baud rate
         self.SAMPLE_RATE = 18000                        # Define the sampling rate (Hz)
         self.NUM_CHANNELS = n_channels                  # Number of channels to read
@@ -119,7 +119,7 @@ class LivePlot():
 
     def readSerialData(self):
         """Read data from serial in a separate thread"""
-        frame_size = 68  # 66 uint16 (2 bytes each) 5
+        frame_size = 260  # 66 uint16 (2 bytes each) 5
 
         while not self.stop_event.is_set():
             if self.ser is not None:
@@ -132,7 +132,7 @@ class LivePlot():
                         print(f"First data received at: {self.first_data_time}")
 
                     frame = self.ser.read(frame_size)
-                    data = struct.unpack('<34H', frame) 
+                    data = struct.unpack('<130H', frame) 
 
                     header = data[0]        # 1st uint16 for header
                     id = data[1]            # 2nd uint16 0-12 channel/wave type 
@@ -142,16 +142,17 @@ class LivePlot():
                     wave_type = id % 3
                     
                     #  debug 
-                    # print(f"Header: {id} Wave Type: {wave_type} Channel: {channel} Data: {data}")
+                    # print(f"Header: {id} Wave Type: {wave_type} Channel: {channel} Data: {data[0]}")
 
                     if header == 0 and channel in self.buffers:
                         wave_name = self.get_wave_name(wave_type)
-
-                        if wave_name:
+                        if wave_name == 'alpha':
                             buffer = self.buffers[channel][wave_name]
 
-                            buffer[:-32] = buffer[32:]
-                            buffer[-32:] = data
+                            buffer[:-128] = buffer[128:]
+                            adjusted_data = (np.array(data) * 1.5) 
+                            buffer[-128:] = adjusted_data
+                            # buffer[-128:] = data * 1.5
 
                             try:
                                 save_data = {
@@ -160,9 +161,60 @@ class LivePlot():
                                 }
                                 self.save_queues[channel][wave_name].put_nowait(save_data)
                             except queue.Full:
-                                pass
                                 # print(f"Queue full for channel {channel} {wave_name}")
+                                pass
+                        elif wave_name == 'beta':
+                            buffer = self.buffers[channel][wave_name]
 
+                            buffer[:-128] = buffer[128:]
+                            adjusted_data = (np.array(data) * 1.5) + 10000
+                            buffer[-128:] = adjusted_data
+                            # buffer[-128:] = (data * 1.5) + 10000
+
+                            try:
+                                save_data = {
+                                    'timestamp': time.time(),
+                                    'samples': list(data)  # Convert to list to ensure serializability
+                                }
+                                self.save_queues[channel][wave_name].put_nowait(save_data)
+                            except queue.Full:
+                                # print(f"Queue full for channel {channel} {wave_name}")
+                                pass
+
+                        elif wave_name == 'gamma':
+                            buffer = self.buffers[channel][wave_name]
+
+                            buffer[:-128] = buffer[128:]
+                            adjusted_data = (np.array(data) * 1.5) + 20000
+                            buffer[-128:] = adjusted_data
+                            # buffer[-128:] = (data * 1.5) + 20000
+
+                            try:
+                                save_data = {
+                                    'timestamp': time.time(),
+                                    'samples': list(data)  # Convert to list to ensure serializability
+                                }
+                                self.save_queues[channel][wave_name].put_nowait(save_data)
+                            except queue.Full:
+                                # print(f"Queue full for channel {channel} {wave_name}")
+                                pass
+
+                        # if wave_name:
+                        #     buffer = self.buffers[channel][wave_name]
+
+                        #     buffer[:-128] = buffer[128:]
+                        #     buffer[-128:] = data
+
+                        #     try:
+                        #         save_data = {
+                        #             'timestamp': time.time(),
+                        #             'samples': list(data)  # Convert to list to ensure serializability
+                        #         }
+                        #         self.save_queues[channel][wave_name].put_nowait(save_data)
+                        #     except queue.Full:
+                        #         # print(f"Queue full for channel {channel} {wave_name}")
+                        #         pass
+                            
     def get_wave_name(self, wave_type):
         """Map wave type to wave name."""
         return {0: 'alpha', 1: 'beta', 2: 'gamma'}.get(wave_type)

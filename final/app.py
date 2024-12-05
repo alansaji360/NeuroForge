@@ -1,6 +1,7 @@
 from imports import *
 from livePlot import LivePlot
 from benchmark import Benchmark
+from controller import Controller
 
 class App():
     def __init__(self):
@@ -13,7 +14,11 @@ class App():
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
         
         self.root.configure(bg=self.BG_COLOR)
+
         self.plot = None
+        self.benchmark = None
+        self.controller = None
+
         self.root.title("NeuroForge")
         self.root.iconbitmap("samurai.ico")
         self.root.resizable(True, True)
@@ -70,6 +75,14 @@ class App():
         self.clearWindow()
         self.benchmark = Benchmark(self.root)
 
+    def toggleController(self):
+        """Toggle the benchmark window."""
+        self.marker = 0
+        self.buttons.stopGlowAnimation()
+        time.sleep(0.5)
+        self.clearWindow()
+        self.Controller = Controller(self.root)
+
     def mainMenu(self):
         """Create the main menu."""
         # while(1):
@@ -80,6 +93,7 @@ class App():
 
         self.buttons.createButton(self.root, "NEUROVISUALIZATON",   self.toggleLivePlot)
         self.buttons.createButton(self.root, "NEUROBENCHMARK",   self.toggleBenchmark)
+        self.buttons.createButton(self.root, "NEUROCONTROLLER",   self.toggleController)
         self.buttons.createButton(self.root, "NEUROEXIT",        exit)
 
         slider_label = tk.Label(self.root, text="SELECT NUMBER OF CHANNELS", bg=self.BG_COLOR, fg="white")

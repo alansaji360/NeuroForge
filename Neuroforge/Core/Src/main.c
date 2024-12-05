@@ -61,17 +61,11 @@
 
 //USB CONSTANTS
 #define DATA_POINTS_PER_PACKET 128
-#define NUM_BUFFERS_TO_PACK 12
+#define NUM_BUFFERS_TO_PACK 6
 #define LIVE_READ_PACKET_SIZE ((DATA_POINTS_PER_PACKET + 2) * NUM_BUFFERS_TO_PACK)
 
 uint16_t live_read_packet[LIVE_READ_PACKET_SIZE];
 uint16_t live_read_packet_2[LIVE_READ_PACKET_SIZE];
-uint16_t live_read_packet_queue[LIVE_READ_PACKET_SIZE * 8];
-int live_read_packet_queue_index = 0;
-uint16_t staged_packet[LIVE_READ_PACKET_SIZE];
-uint16_t staged_packet_2[LIVE_READ_PACKET_SIZE];
-
-
 
 uint16_t adc_vals[CHANNELWIDTH][BUFFERSIZE];
 uint16_t alpha_vals[CHANNELWIDTH][BUFFERSIZE];
@@ -128,10 +122,6 @@ int usb_success = 0;
 int usb_success_2 = 0;
 int usb_busy = 0;
 int usb_busy_2 = 0;
-int is_second_loop = 0;
-int transmit_order[100];
-int transmit_order_index = 0;
-
 
 /* USER CODE END PV */
 
@@ -145,15 +135,12 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 
 void package_point(uint16_t* final_packet_buffer, uint16_t* unpacked_buffer, uint16_t identifier, int final_packet_pointer, int buffer_pointer, int num_points) {
-    final_packet_buffer[final_packet_pointer * (num_points + 2)] = 0;
+    uint16_t zero = 0;
+    final_packet_buffer[final_packet_pointer * (num_points + 2)] = zero;
     final_packet_buffer[final_packet_pointer * (num_points + 2) + 1] = identifier;
-//    for (int i = 0; i < num_points; i++) {
-//        final_packet_buffer[final_packet_pointer * (num_points + 2) + 2 + i] = unpacked_buffer[buffer_pointer + i];
-//    }
-    memcpy(&final_packet_buffer[final_packet_pointer * (num_points + 2) + 2],
-           &unpacked_buffer[buffer_pointer],
-           num_points * sizeof(final_packet_buffer[0]));
-
+    for (int i = 0; i < num_points; i++) {
+        final_packet_buffer[final_packet_pointer * (num_points + 2) + 2 + i] = unpacked_buffer[buffer_pointer + i];
+    }
 //    final_packet_buffer[final_packet_pointer * 3 + 2] = unpacked_buffer[buffer_pointer];
 
 }
@@ -282,10 +269,10 @@ void DSP(uint8_t chl, uint8_t flag){
 		full_usb[chl] = 1;
 	}
 
-//	half_full_usb[2] = 1;
-//	half_full_usb[3] = 1;
-//	full_usb[2] = 1;
-//	full_usb[3] = 1;
+	half_full_usb[2] = 1;
+	half_full_usb[3] = 1;
+	full_usb[2] = 1;
+	full_usb[3] = 1;
 }
 
 void Cycle_Delay(uint16_t cycles_to_wait){
@@ -419,6 +406,7 @@ int main(void)
   MX_TIM17_Init();
   MX_SDADC2_Init();
   MX_TIM7_Init();
+  MX_TIM19_Init();
   /* USER CODE BEGIN 2 */
   __enable_irq();
 //  aux_retrigger_usb();
@@ -499,13 +487,13 @@ int main(void)
 		gamma_vals[0],
 		alpha_vals[1],
 		beta_vals[1],
-		gamma_vals[1],
-	    alpha_vals[2],
-	    beta_vals[2],
-	    gamma_vals[2],
-		alpha_vals[3],
-		beta_vals[3],
-		gamma_vals[3]
+		gamma_vals[1]
+//	    alpha_vals[2],
+//	    beta_vals[2],
+//	    gamma_vals[2],
+//		alpha_vals[3],
+//		beta_vals[3],
+//		gamma_vals[3]
 	};
 
 //  aux_retrigger_usb();
@@ -521,12 +509,12 @@ int main(void)
 	  if(data_ready[1]){
 		  DSP(1, half_flag[1]);
 	  }
-	  if(data_ready[2]){
-		  DSP(2, half_flag[2]);
-	  }
-	  if(data_ready[3]){
-		  DSP(3, half_flag[3]);
-	  }
+//	  if(data_ready[2]){
+//		  DSP(2, half_flag[2]);
+//	  }
+//	  if(data_ready[3]){
+//		  DSP(3, half_flag[3]);
+//	  }
 
 	  if(usb_start){
 //		  if(half_full_usb[0] == 1 && half_full_usb[1] == 1 && half_full_usb[2] == 1 && half_full_usb[3] == 1 && last_half_sent == 2) {
@@ -570,8 +558,6 @@ int main(void)
 			  	  		half_repeated++;
 			  	  	}
 			  	  	half_entered++;
-			  	  	transmit_order[transmit_order_index] = 1;
-			  	  	transmit_order_index++;
 
 
 		  			half_full_usb[0] = 0;
@@ -579,58 +565,40 @@ int main(void)
 		  			half_full_usb[2] = 0;
 		  			half_full_usb[3] = 0;
 		  			int buffer_index_counter = 0;
-//		  			int num_loops = 0;
+		  			int num_loops = 0;
 
 		  			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
 		  //			  start_time = HAL_GetTick();
 		  			  package_several_points_per_buffer(live_read_packet, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
 		  			  buffer_index_counter += DATA_POINTS_PER_PACKET;
-//		  			  int result = CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
-		  			  memcpy(&staged_packet, &live_read_packet, sizeof(live_read_packet));
-		  			  int result = CDC_Transmit_FS((uint8_t*)&staged_packet, sizeof(staged_packet));
-
-//		  			  HAL_Delay(2);
+		  			  int result = CDC_Transmit_FS((uint8_t*)&live_read_packet, sizeof(live_read_packet));
 		  			  if(result == 0) {
 		  				  usb_success++;
 		  			  } else if(result == 1) {
 		  				  usb_busy++;
 		  			  }
-//		  			  num_loops++;
-//		  			  if (num_loops > num_packets_per_flag) {
-//		  				  num_packets_per_flag = num_loops;
-//		  			  }
-//		  			for(int i =0; i < 10; i++)
-//		  			    {
-//		  			        myGlobalArray[i] = nums[i];
-//		  			    }
+		  			  num_loops++;
+		  			  if (num_loops > num_packets_per_flag) {
+		  				  num_packets_per_flag = num_loops;
+		  			  }
 		  			}
 		  			last_half_sent = 1;
 		  		  }
 		  		  if(full_usb[0] == 1 && full_usb[1] == 1 && full_usb[2] == 1 && full_usb[3] == 1) {
 		  			full_entered++;
-//		  			transmit_order[transmit_order_index] = 1;
-//					transmit_order_index++;
 		  			full_usb[0] = 0;
 		  			full_usb[1] = 0;
 		  			full_usb[2] = 0;
 		  			full_usb[3] = 0;
-		  			transmit_order[transmit_order_index] = 2;
-		  								transmit_order_index++;
 		  			if (last_half_sent == 2) {
 		  				full_repeated++;
 		  			}
-
 		  			int buffer_index_counter = DATASIZE;
 
 		  			for(int i = 0; i < DATASIZE; i += DATA_POINTS_PER_PACKET) {
 		  			  package_several_points_per_buffer(live_read_packet_2, usb_buffers, NUM_BUFFERS_TO_PACK, buffer_index_counter, DATA_POINTS_PER_PACKET);
 		  			  buffer_index_counter += DATA_POINTS_PER_PACKET;
-//		  			  int result = CDC_Transmit_FS((uint8_t*)&live_read_packet_2, sizeof(live_read_packet_2));
-		  			  memcpy(&staged_packet_2, &live_read_packet_2, sizeof(live_read_packet_2));
-					  int result = CDC_Transmit_FS((uint8_t*)&staged_packet_2, sizeof(staged_packet_2));
-
-
-//		  			  HAL_Delay(2);
+		  			  int result = CDC_Transmit_FS((uint8_t*)&live_read_packet_2, sizeof(live_read_packet_2));
 		  			  if(result == 0) {
 		  				  usb_success_2++;
 					  } else if(result == 1) {
@@ -639,10 +607,6 @@ int main(void)
 
 		  		    }
 		  			last_half_sent = 2;
-		  			is_second_loop++;
-		  			if (is_second_loop == 2) {
-		  				int flag = 0;
-		  			}
 		  		  }
       }
 

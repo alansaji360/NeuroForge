@@ -61,6 +61,7 @@ extern SDADC_HandleTypeDef hsdadc1;
 extern SDADC_HandleTypeDef hsdadc2;
 extern TIM_HandleTypeDef htim13;
 extern TIM_HandleTypeDef htim17;
+extern TIM_HandleTypeDef htim19;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -314,6 +315,20 @@ void USB_LP_IRQHandler(void)
   /* USER CODE BEGIN USB_LP_IRQn 1 */
 
   /* USER CODE END USB_LP_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM19 global interrupt.
+  */
+void TIM19_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM19_IRQn 0 */
+
+  /* USER CODE END TIM19_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim19);
+  /* USER CODE BEGIN TIM19_IRQn 1 */
+
+  /* USER CODE END TIM19_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

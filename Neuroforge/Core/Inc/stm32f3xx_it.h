@@ -63,6 +63,7 @@ void TIM13_IRQHandler(void);
 void SDADC1_IRQHandler(void);
 void SDADC2_IRQHandler(void);
 void USB_LP_IRQHandler(void);
+void TIM19_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

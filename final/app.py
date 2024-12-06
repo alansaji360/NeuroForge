@@ -2,6 +2,7 @@ from imports import *
 from livePlot import LivePlot
 from benchmark import Benchmark
 from controller import Controller
+from fft import Fourier
 
 class App():
     def __init__(self):
@@ -18,15 +19,16 @@ class App():
         self.plot = None
         self.benchmark = None
         self.controller = None
+        self.fourier = None
 
         self.root.title("NeuroForge")
         self.root.iconbitmap("samurai.ico")
         self.root.resizable(True, True)
-
+    
         self.marker = 1
         self.buttons = ButtonStyles(self.root)
 
-        self.n_channels_slider = 1
+        self.n_channels_slider = 1          
 
         self.mainMenu()
 
@@ -61,9 +63,11 @@ class App():
         time.sleep(0.5)
         
         self.clearWindow()
-
-        with open('waveform_data.csv', 'w') as file:
-            file.truncate(0)
+        try:
+            with open('waveform_data.csv', 'w') as file:
+                file.truncate(0)
+        except Exception as e:
+            print(f"Error: {e}")
         print("waveform_data.csv: cleared")
         self.plot = LivePlot(self.root, n_channels=n_channel)
 
@@ -80,8 +84,18 @@ class App():
         self.marker = 0
         self.buttons.stopGlowAnimation()
         time.sleep(0.5)
+
+        n_channel = self.n_channels_slider.get()
         self.clearWindow()
-        self.Controller = Controller(self.root)
+        self.controller = Controller(self.root, n_channels=self.n_channel)
+
+    def toggleFFT(self):
+        """Toggle the benchmark window."""
+        self.marker = 0
+        self.buttons.stopGlowAnimation()
+        time.sleep(0.5)
+        self.clearWindow()
+        self.fourier = Fourier(self.root)
 
     def mainMenu(self):
         """Create the main menu."""
@@ -94,6 +108,7 @@ class App():
         self.buttons.createButton(self.root, "NEUROVISUALIZATON",   self.toggleLivePlot)
         self.buttons.createButton(self.root, "NEUROBENCHMARK",   self.toggleBenchmark)
         self.buttons.createButton(self.root, "NEUROCONTROLLER",   self.toggleController)
+        # self.buttons.createButton(self.root, "NEUROFFT",   self.toggleFFT)
         self.buttons.createButton(self.root, "NEUROEXIT",        exit)
 
         slider_label = tk.Label(self.root, text="SELECT NUMBER OF CHANNELS", bg=self.BG_COLOR, fg="white")

@@ -1,7 +1,7 @@
 from imports import *
 
 class Controller():
-    def __init__(self, root):
+    def __init__(self, root, n_channels=1):
         """Initialize BCI Controller"""
         # Create a new frame inside the main window
         self.frame = ttk.Frame(root)
@@ -11,7 +11,7 @@ class Controller():
         self.COM_PORT = 'COM7'                         
         self.BAUD_RATE = 115200                         
         self.SAMPLE_RATE = 18000                        
-        self.NUM_CHANNELS = 1                  
+        self.NUM_CHANNELS = n_channels                  
         self.BUFFER_SIZE = 5000                         
         self.Y_MIN = -1000                              
         self.Y_MAX = 60000                              
@@ -121,6 +121,7 @@ class Controller():
         self.last_trigger_time = {}
         self.debounce_time = 0.3  # seconds
         self.indicator_reset_time = 0.2  # seconds
+        self.past_state = 0
         
         for ch in range(self.NUM_CHANNELS):
             self.thresholds[ch] = {
@@ -167,6 +168,7 @@ class Controller():
         """Create a menu for selecting probe location and mapping"""
         # Create probe menu frame
         self.probe_frame = ttk.Frame(self.feedback_container)
+        # self.probe_frame.pack(fill=tk.X, pady=5, before=self.indicators_frame)
         self.probe_frame.pack(fill=tk.X, pady=5)
         
         probe_label = ttk.Label(self.probe_frame, text="Select Probe Location:")
@@ -174,24 +176,14 @@ class Controller():
         
         self.probe_locations = {
             "C3/4 - Right/Left Hand Movement": {
-                (0, 'alpha'): 'space',  # Lighter movements
-                (0, 'beta'): 'enter',   # Medium movements
-                (0, 'gamma'): 'esc'     # Strong movements
+                (0, 'alpha'):   'space',      # Lighter movements
+                (0, 'beta'):    '',           # Medium movements
+                (0, 'gamma'):   ''            # Strong movements
             },
-            "O1/O2 - Visual": {
-                (0, 'alpha'): 'tab',  # Eyes closed
-                (0, 'beta'): 'space',     # Visual focus
-                (0, 'gamma'): 'backspace'   # High visual attention
-            },
-            "F3/F4 - Concentration": {
-                (0, 'alpha'): 'left',   # Light focus
-                (0, 'beta'): 'space',   # Medium focus
-                (0, 'gamma'): 'right'   # High focus
-            },
-            "Fp1/Fp2 - Eye Movement": {
-                (0, 'alpha'): 'up',     # Light blinks
-                (0, 'beta'): 'space',   # Strong blinks
-                (0, 'gamma'): 'down'    # Extended blinks
+            "O1/O2 - Temple": {
+                (0, 'alpha'):   '',         # Blink
+                (0, 'beta'):    'space',    # Jaw + Blink
+                (0, 'gamma'):   ' '         # Jaw
             }
         }
         
@@ -400,7 +392,7 @@ class Controller():
                 resting_std = stdev(self.resting_values[ch][wave_type])
                 impulse_mean = mean(self.impulse_values[ch][wave_type])
                 
-                self.thresholds[ch][wave_type] = (resting_mean + impulse_mean) / 2 + (3 * resting_std)
+                self.thresholds[ch][wave_type] = (resting_mean + impulse_mean) / 2 + (2.5 * resting_std)
 
     def check_impulses(self, channel, wave_type):
         """Check for impulses and trigger keyboard events"""
@@ -417,10 +409,16 @@ class Controller():
         if signal_strength > self.thresholds[channel][wave_type]:
             key = self.key_mappings.get((channel, wave_type))
             if key and (current_time - self.last_trigger_time[(channel, wave_type)]) > self.debounce_time:
-                keyboard.press_and_release(key)
-                self.last_trigger_time[(channel, wave_type)] = current_time
-                self.log_message(f"Impulse detected on channel {channel} {wave_type} - Triggered key: {key}")
-                self.frame.after(0, lambda ch=channel, wt=wave_type: self.set_indicator(ch, wt, True))
+                if self.past_state > 1:
+                    keyboard.press(key)
+                else:
+                    self.past_state += 1
+                    keyboard.press_and_release(key)
+                    self.last_trigger_time[(channel, wave_type)] = current_time
+                    self.log_message(f"Impulse detected on channel {channel} {wave_type} - Triggered key: {key}")
+                    self.frame.after(0, lambda ch=channel, wt=wave_type: self.set_indicator(ch, wt, True))
+        elif signal_strength < self.thresholds[channel][wave_type] and (current_time - self.last_trigger_time[(channel, wave_type)]) > self.debounce_time:
+            self.past_state = 0
 
     def get_wave_name(self, wave_type):
         """Map wave type to wave name."""

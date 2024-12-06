@@ -70,7 +70,8 @@ void MX_SDADC1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_SDADC_InjectedConfigChannel(&hsdadc1, SDADC_CHANNEL_2|SDADC_CHANNEL_4, SDADC_CONTINUOUS_CONV_ON) != HAL_OK)
+  if (HAL_SDADC_InjectedConfigChannel(&hsdadc1, SDADC_CHANNEL_2|SDADC_CHANNEL_4
+                              |SDADC_CHANNEL_1|SDADC_CHANNEL_6, SDADC_CONTINUOUS_CONV_ON) != HAL_OK)
   {
     Error_Handler();
   }
@@ -96,6 +97,20 @@ void MX_SDADC1_Init(void)
   /** Configure the Injected Channel
   */
   if (HAL_SDADC_AssociateChannelConfig(&hsdadc1, SDADC_CHANNEL_4, SDADC_CONF_INDEX_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure the Injected Channel
+  */
+  if (HAL_SDADC_AssociateChannelConfig(&hsdadc1, SDADC_CHANNEL_1, SDADC_CONF_INDEX_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure the Injected Channel
+  */
+  if (HAL_SDADC_AssociateChannelConfig(&hsdadc1, SDADC_CHANNEL_6, SDADC_CONF_INDEX_0) != HAL_OK)
   {
     Error_Handler();
   }
@@ -197,15 +212,18 @@ void HAL_SDADC_MspInit(SDADC_HandleTypeDef* sdadcHandle)
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOE_CLK_ENABLE();
     /**SDADC1 GPIO Configuration
+    PB0     ------> SDADC1_AIN6P
+    PB1     ------> SDADC1_AIN5P
     PB2     ------> SDADC1_AIN4P
     PE10     ------> SDADC1_AIN2P
+    PE11     ------> SDADC1_AIN1P
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_2;
+    GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_10;
+    GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -256,12 +274,15 @@ void HAL_SDADC_MspDeInit(SDADC_HandleTypeDef* sdadcHandle)
     __HAL_RCC_SDADC1_CLK_DISABLE();
 
     /**SDADC1 GPIO Configuration
+    PB0     ------> SDADC1_AIN6P
+    PB1     ------> SDADC1_AIN5P
     PB2     ------> SDADC1_AIN4P
     PE10     ------> SDADC1_AIN2P
+    PE11     ------> SDADC1_AIN1P
     */
-    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_2);
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2);
 
-    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_10);
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_10|GPIO_PIN_11);
 
     /* SDADC1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(SDADC1_IRQn);

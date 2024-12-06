@@ -61,7 +61,7 @@
 
 //USB CONSTANTS
 #define DATA_POINTS_PER_PACKET 128
-#define NUM_BUFFERS_TO_PACK 6
+#define NUM_BUFFERS_TO_PACK 12
 #define LIVE_READ_PACKET_SIZE ((DATA_POINTS_PER_PACKET + 2) * NUM_BUFFERS_TO_PACK)
 
 uint16_t live_read_packet[LIVE_READ_PACKET_SIZE];
@@ -175,7 +175,7 @@ void package_several_points_per_buffer_2(
 
 int aux_retrigger_usb()
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+//    GPIO_InitTypeDef GPIO_InitStructure;
 //    USBD_Stop(&hUsbDeviceFS);
     HAL_Delay(100);
 //    USBD_DeInit(&hUsbDeviceFS);
@@ -224,6 +224,7 @@ void DSP(uint8_t chl, uint8_t flag){
 	float out100low;
 
 	for(int i = 0; i < DATASIZE; i++){
+
 		in8high = (float) (input_buffer_ptr[chl][i]);
 //		in12low = (float) (input_buffer_ptr[chl][i]);
 		in12high = (float) (input_buffer_ptr[chl][i]);
@@ -243,13 +244,13 @@ void DSP(uint8_t chl, uint8_t flag){
 		out12high = IIR2_Update(&high_12_2[chl], out12high);
 
 		out30low = IIR2_Update(&low_30_1[chl], out12high);
-		out30low = IIR2_Update(&low_30_2[chl], out30low) + 15000;
+		out30low = IIR2_Update(&low_30_2[chl], out30low) + 20000;
 
 		out30high = IIR2_Update(&high_30_1[chl], in30high);
 		out30high = IIR2_Update(&high_30_2[chl], out30high);
 
 		out100low = IIR2_Update(&low_100_1[chl], out30high);
-		out100low = IIR2_Update(&low_100_2[chl], out100low) + 15000;
+		out100low = IIR2_Update(&low_100_2[chl], out100low) + 20000;
 
 		alpha_buffer_ptr[chl][i] = (uint16_t) (out12low);
 		beta_buffer_ptr[chl][i] = (uint16_t) (out30low);
@@ -269,10 +270,10 @@ void DSP(uint8_t chl, uint8_t flag){
 		full_usb[chl] = 1;
 	}
 
-	half_full_usb[2] = 1;
-	half_full_usb[3] = 1;
-	full_usb[2] = 1;
-	full_usb[3] = 1;
+//	half_full_usb[2] = 1;
+//	half_full_usb[3] = 1;
+//	full_usb[2] = 1;
+//	full_usb[3] = 1;
 }
 
 void Cycle_Delay(uint16_t cycles_to_wait){
@@ -303,18 +304,24 @@ void HAL_SDADC_InjectedConvCpltCallback(SDADC_HandleTypeDef *hsdadc)
 	  else if(InjChannel == 4){
 		  ch = 1;
 	  }
-  }
-  else if (hsdadc->Instance == SDADC2){
-	  // SDADC2 completed the injected conversion
-	  if(InjChannel == 2){
+	  else if(InjChannel == 1){
 		  ch = 2;
 	  }
-	  else if(InjChannel == 1){
+	  else if(InjChannel == 6){
 		  ch = 3;
 	  }
   }
+//  else if (hsdadc->Instance == SDADC2){
+//	  // SDADC2 completed the injected conversion
+//	  if(InjChannel == 2){
+//		  ch = 2;
+//	  }
+//	  else if(InjChannel == 1){
+//		  ch = 3;
+//	  }
+//  }
 
-  HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, alpha_vals[0][conv_ctr[0]]);
+  HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, gamma_vals[0][conv_ctr[0]]);
 
 
   adc_vals[ch][conv_ctr[ch]] = conv_val;
@@ -354,7 +361,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   // Start Timer 7
   HAL_TIM_Base_Start(&htim7);
 
-  while (__HAL_TIM_GET_COUNTER(&htim7) < 20000) {
+  while (__HAL_TIM_GET_COUNTER(&htim7) < 65534) {
   }
 
   // Stop Timer 7
@@ -412,59 +419,61 @@ int main(void)
 //  aux_retrigger_usb();
 
   // INIT FILTERS
-  for(int i = 0; i < CHANNELWIDTH/2; i++){
+//  for(int i = 0; i < CHANNELWIDTH; i++){
+//	// 8 Hz High
+//	IIR1_Init(&high_8_1[i], -0.9980, 0.9990, -0.9990);
+//	IIR1_Init(&high_8_2[i], -0.9980, 0.9990, -0.9990);
+//	IIR1_Init(&high_8_3[i], -0.9980, 0.9990, -0.9990);
+//
+//	// 12 Hz low
+//	IIR1_Init(&low_12_1[i], -0.9898, 0.0051, 0.0051);
+//	IIR1_Init(&low_12_2[i], -0.9837, 0.0082, 0.0082);
+//	IIR1_Init(&low_12_3[i], -0.9871, 0.0065, 0.0065);
+//
+//	// 12 Hz High
+//	IIR2_Init(&high_12_1[i], -1.9947, 0.9947, 0.9096, -1.8192, 0.9096);
+//	IIR2_Init(&high_12_2[i], -1.9901, 0.9902, 0.9951, -1.9902, 0.9951);
+//
+//	// 30 Hz low
+//	IIR2_Init(&low_30_1[i], -1.9828, 0.9835, 0.5578, -1.1149, 0.5578);
+//	IIR2_Init(&low_30_2[i], -1.9770, 0.9777, 0.3128, -0.6249, 0.3128);
+//
+//	// 30 Hz High
+//	IIR2_Init(&high_30_1[i], -1.9744, 0.9748, 0.9429, -1.8857, 0.9429);
+//	IIR2_Init(&high_30_2[i], -1.9711, 0.9717, 0.9413, -1.8827, 0.9413);
+//
+//	// 100 Hz Low
+//	IIR2_Init(&low_100_1[i], -1.974264, 0.975777, 0.555675, -1.109922, 0.555675);
+//	IIR2_Init(&low_100_2[i], -1.966697, 0.969158, 0.553904, -1.105485, 0.553904);
+//
+//  }
+  for(int i = 0; i < CHANNELWIDTH; i++){ // filters for signals sampled by sdadc2
 	// 8 Hz High
-	IIR1_Init(&high_8_1[i], -0.9980, 0.9990, -0.9990);
-	IIR1_Init(&high_8_2[i], -0.9980, 0.9990, -0.9990);
-	IIR1_Init(&high_8_3[i], -0.9980, 0.9990, -0.9990);
+	IIR1_Init(&high_8_1[i], -0.995746, 0.997873, -0.997873);
+	IIR1_Init(&high_8_2[i], -0.994156, 0.997078, -0.997078);
+	IIR1_Init(&high_8_3[i], -0.995039, 0.997519, -0.997519);
 
 	// 12 Hz low
-	IIR1_Init(&low_12_1[i], -0.9898, 0.0051, 0.0051);
-	IIR1_Init(&low_12_2[i], -0.9837, 0.0082, 0.0082);
-	IIR1_Init(&low_12_3[i], -0.9871, 0.0065, 0.0065);
+	IIR1_Init(&low_12_1[i], -0.972264, 0.013868, 0.013868);
+	IIR1_Init(&low_12_2[i], -0.966278, 0.016861, 0.016861);
+	IIR1_Init(&low_12_3[i], -0.969599, 0.015201, 0.015201);
 
 	// 12 Hz High
-	IIR2_Init(&high_12_1[i], -1.9947, 0.9947, 0.9096, -1.8192, 0.9096);
-	IIR2_Init(&high_12_2[i], -1.9901, 0.9902, 0.9951, -1.9902, 0.9951);
+	IIR2_Init(&high_12_1[i], -1.981415, 0.981780, 0.883059, -1.766082, 0.883059);
+	IIR2_Init(&high_12_2[i], -1.977786, 0.978031, 0.988954, -1.977908, 0.988954);
 
 	// 30 Hz low
-	IIR2_Init(&low_30_1[i], -1.9828, 0.9835, 0.5578, -1.1149, 0.5578);
-	IIR2_Init(&low_30_2[i], -1.9770, 0.9777, 0.3128, -0.6249, 0.3128);
+	IIR2_Init(&low_30_1[i], -1.966084, 0.968630, 0.553764, -1.105124, 0.553764);
+	IIR2_Init(&low_30_2[i], -1.956684, 0.959172, 0.310149, -0.618004, 0.310149);
 
 	// 30 Hz High
-	IIR2_Init(&high_30_1[i], -1.9744, 0.9748, 0.9429, -1.8857, 0.9429);
-	IIR2_Init(&high_30_2[i], -1.9711, 0.9717, 0.9413, -1.8827, 0.9413);
+	IIR2_Init(&high_30_1[i], -1.950197, 0.951961, 0.920969, -1.841937, 0.920969);
+	IIR2_Init(&high_30_2[i], -1.944739, 0.947082, 0.897621, -1.795241, 0.897621);
 
 	// 100 Hz Low
-	IIR2_Init(&low_100_1[i], -1.9090, 0.9146, 0.3037, -0.6018, 0.3037);
-	IIR2_Init(&low_100_2[i], -1.9115, 0.9439, 0.8670, -1.7021, 0.8670);
-  }
-  for(int i = CHANNELWIDTH/2; i < CHANNELWIDTH; i++){ // filters for signals sampled by sdadc2
-	// 8 Hz High
-	IIR1_Init(&high_8_1[i], -0.9977, 0.9988, -0.9988);
-	IIR1_Init(&high_8_2[i], -0.9977, 0.9988, -0.9988);
-	IIR1_Init(&high_8_3[i], -0.9977, 0.9988, -0.9988);
+	IIR2_Init(&low_100_1[i], -1.938012, 0.945733, 0.547820, -1.088351, 0.547820);
+	IIR2_Init(&low_100_2[i], -1.929655, 0.939339, 0.546209, -1.083277, 0.546209);
 
-	// 12 Hz low
-	IIR1_Init(&low_12_1[i], -0.9837, 0.0082, 0.0082);
-	IIR1_Init(&low_12_2[i], -0.9776, 0.0112, 0.0112);
-	IIR1_Init(&low_12_3[i], -0.9810, 0.0095, 0.0095);
-
-	// 12 Hz High
-	IIR2_Init(&high_12_1[i], -1.995658, 0.995741, 0.997868, -1.995662, 0.997868);
-	IIR2_Init(&high_12_2[i], -1.988646, 0.988710, 0.994339, -1.988678, 0.994339);
-
-	// 30 Hz low
-	IIR2_Init(&low_30_1[i], -1.9787, 0.9798, 0.5568, -1.1125, 0.5568);
-	IIR2_Init(&low_30_2[i], -1.9720, 0.9730, 0.3121, -0.6233, 0.3121);
-
-	// 30 Hz High
-	IIR2_Init(&high_30_1[i], -1.9703, 0.9709, 0.9302, -1.8603, 0.9302);
-	IIR2_Init(&high_30_2[i], -1.9669, 0.9677, 0.9286, -1.8573, 0.9286);
-
-	// 100 Hz Low
-	IIR2_Init(&low_100_1[i], -1.8735, 0.8840, 0.2997, -0.5889, 0.2997);
-	IIR2_Init(&low_100_2[i], -1.8766, 0.9290, 0.8609, -1.6699, 0.8609);
   }
 
   HAL_SDADC_CalibrationStart(&hsdadc1, SDADC_CALIBRATION_SEQ_1);
@@ -478,7 +487,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim13, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
   HAL_SDADC_InjectedStart_IT(&hsdadc1);
-  HAL_SDADC_InjectedStart_IT(&hsdadc2);
+//  HAL_SDADC_InjectedStart_IT(&hsdadc2);
   HAL_DAC_Start(&hdac2, DAC_CHANNEL_1);
   usb_start = 0;
   uint16_t* usb_buffers[] = {
@@ -487,13 +496,13 @@ int main(void)
 		gamma_vals[0],
 		alpha_vals[1],
 		beta_vals[1],
-		gamma_vals[1]
-//	    alpha_vals[2],
-//	    beta_vals[2],
-//	    gamma_vals[2],
-//		alpha_vals[3],
-//		beta_vals[3],
-//		gamma_vals[3]
+		gamma_vals[1],
+	    alpha_vals[2],
+	    beta_vals[2],
+	    gamma_vals[2],
+		alpha_vals[3],
+		beta_vals[3],
+		gamma_vals[3]
 	};
 
 //  aux_retrigger_usb();
@@ -509,12 +518,12 @@ int main(void)
 	  if(data_ready[1]){
 		  DSP(1, half_flag[1]);
 	  }
-//	  if(data_ready[2]){
-//		  DSP(2, half_flag[2]);
-//	  }
-//	  if(data_ready[3]){
-//		  DSP(3, half_flag[3]);
-//	  }
+	  if(data_ready[2]){
+		  DSP(2, half_flag[2]);
+	  }
+	  if(data_ready[3]){
+		  DSP(3, half_flag[3]);
+	  }
 
 	  if(usb_start){
 //		  if(half_full_usb[0] == 1 && half_full_usb[1] == 1 && half_full_usb[2] == 1 && half_full_usb[3] == 1 && last_half_sent == 2) {
